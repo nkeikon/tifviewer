@@ -21,6 +21,11 @@ dependencies = [
 [project.scripts]
 viewtif = "viewtif.tif_viewer:main"
 
+[project.urls]
+"Homepage" = "https://github.com/nkeikon/tifviewer"
+"Source" = "https://github.com/nkeikon/tifviewer"
+"Issues" = "https://github.com/nkeikon/tifviewer/issues"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/viewtif"]
 
