@@ -47,6 +47,8 @@ viewtif --rgbfiles \
 | `[` / `]`            | Previous / next band (single-band only) |
 | `R`                  | Reset view                              |
 
+Note: As of v1.0.5, you can use your mouse or trackpad to zoom in and out.
+
 ## Features
 - Command-line driven GeoTIFF viewer
 - Supports single-band or RGB composite display.
@@ -68,6 +70,6 @@ Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Purkis
 # License
 This project is released under the MIT License.
 
-## Contributors
+# Contributors
 - [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support
 
