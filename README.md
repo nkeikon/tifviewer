@@ -67,3 +67,7 @@ Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Purkis
 
 # License
 This project is released under the MIT License.
+
+## Contributors
+- [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support
+
