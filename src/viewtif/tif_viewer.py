@@ -85,7 +85,7 @@ class TiffViewer(QMainWindow):
         self.rgb = rgb
         self.rgbfiles = rgbfiles
 
-        self._scale_arg = max(1, int(scale))
+        self._scale_arg = max(1, int(scale or 1))
         self._transform: Affine | None = None
         self._crs = None
 
@@ -482,14 +482,14 @@ def run_viewer(
 import click
 
 @click.command()
-@click.argument("tif_path", type=click.Path(exists=True))
-@click.option("--shapefile", type=click.Path(exists=True), default=None,
-              help="Optional shapefile overlay")
-@click.option("--scale", type=float, default=None, help="Optional scale")
-@click.option("--band", type=int, default=None, help="Optional band index")
-def main(tif_path, shapefile, scale, band):
-    """CLI entry point for viewtif"""
-    run_viewer(tif_path, scale=scale, band=band, shapefile=shapefile)
+@click.argument("tif_path")
+@click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
+@click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
+@click.option("--shapefile", type=str, help="Optional shapefile to overlay")
+@click.option("--shp-width", default=1.0, show_default=True, type=float, help="Line width for shapefile overlay")
+def main(tif_path, band, scale, shapefile, shp_width):
+    """Lightweight GeoTIFF viewer."""
+    run_viewer(tif_path, scale=scale, band=band, shapefile=shapefile, shp_width=shp_width)
 
 if __name__ == "__main__":
     main()
