@@ -74,8 +74,8 @@ class TiffViewer(QMainWindow):
         rgb: list[int] | None = None,
         rgbfiles: list[str] | None = None,
         shapefiles: list[str] | None = None,
-        shp_color: str = "cyan",
-        shp_width: float = 1.5,
+        shp_color: str = "white",
+        shp_width: float = 2,
     ):
         super().__init__()
 
@@ -482,14 +482,36 @@ def run_viewer(
 import click
 
 @click.command()
-@click.argument("tif_path")
+@click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
-@click.option("--shapefile", type=str, help="Optional shapefile to overlay")
-@click.option("--shp-width", default=1.0, show_default=True, type=float, help="Line width for shapefile overlay")
-def main(tif_path, band, scale, shapefile, shp_width):
+@click.option("--rgb", nargs=3, type=int, help="Three band numbers for RGB, e.g. --rgb 4 3 2")
+@click.option("--rgbfiles", nargs=3, type=str, help="Three single-band TIFFs for RGB, e.g. --rgbfiles B4.tif B3.tif B2.tif")
+@click.option("--shapefile", multiple=True, type=str, help="One or more shapefiles to overlay")
+@click.option("--shp-color", default="white", show_default=True, help="Overlay color (name or #RRGGBB).")
+@click.option("--shp-width", default=1.0, show_default=True, type=float, help="Overlay line width (screen pixels).")
+def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width):
     """Lightweight GeoTIFF viewer."""
-    run_viewer(tif_path, scale=scale, band=band, shapefile=shapefile, shp_width=shp_width)
+
+    # --- Warn early if shapefile requested but geopandas missing ---
+    if shapefile and not HAVE_GEO:
+        print(
+            "[WARN] --shapefile requires geopandas and shapely.\n"
+            "       Install them with: pip install viewtif[geo]\n"
+            "       Proceeding without shapefile overlay."
+        )
+
+    run_viewer(
+        tif_path,
+        scale=scale,
+        band=band,
+        rgb=rgb,
+        rgbfiles=rgbfiles,
+        shapefile=shapefile,
+        shp_color=shp_color,
+        shp_width=shp_width,
+    )
+
 
 if __name__ == "__main__":
     main()
