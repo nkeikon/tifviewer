@@ -10,16 +10,23 @@ You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays i
 
 ```bash
 pip install viewtif
+```
 
 ## Quick Start
+```bash
 # View a GeoTIFF
 viewtif examples/sample_data/ECOSTRESS_LST.tif
 
 # View with shapefile overlay
-viewtif examples/sample_data/ECOSTRESS_LST.tif --shapefile examples/sample_data/Zip_Codes.shp
+viewtif examples/sample_data/ECOSTRESS_LST.tif \
+  --shapefile examples/sample_data/Zip_Codes.shp
 
 # View an RGB composite
-viewtif --rgbfiles examples/sample_data/HLS_B4.tif examples/sample_data/HLS_B3.tif examples/sample_data/HLS_B2.tif
+viewtif --rgbfiles \
+  examples/sample_data/HLS_B4.tif \
+  examples/sample_data/HLS_B3.tif \
+  examples/sample_data/HLS_B2.tif
+
 ```
 
 ## Controls
