@@ -12,6 +12,13 @@ You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays i
 pip install viewtif
 ```
 
+If you want to enable shapefile overlays, install with optional dependencies:
+```bash
+pip install "viewtif[geo]"
+```
+Note for macOS(zsh) users:
+Make sure to include the quotes, or zsh will interpret it as a pattern.
+
 ## Quick Start
 ```bash
 # View a GeoTIFF
