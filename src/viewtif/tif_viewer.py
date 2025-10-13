@@ -62,6 +62,31 @@ class RasterView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._wheel_zoom_step = 1.2
+
+    def wheelEvent(self, event):
+        """Zoom in/out centered at the cursor position.
+
+        Uses a multiplicative scale per 15° wheel step.
+        """
+        delta = event.angleDelta().y()
+        if delta == 0:
+            # Trackpads may report pixelDelta; fall back to it if angleDelta is 0
+            pixel_delta = event.pixelDelta().y()
+            delta = pixel_delta
+
+        if delta == 0:
+            event.ignore()
+            return
+
+        steps = delta / 120.0  # 120 units per 15° step
+        if steps > 0:
+            factor = self._wheel_zoom_step ** steps
+        else:
+            factor = (1.0 / self._wheel_zoom_step) ** (-steps)
+
+        self.scale(factor, factor)
+        event.accept()
 
 
 # ------------------------------- Main Window ------------------------------ #

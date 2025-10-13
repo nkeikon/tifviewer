@@ -30,9 +30,9 @@ viewtif examples/sample_data/ECOSTRESS_LST.tif \
 
 # View an RGB composite
 viewtif --rgbfiles \
-  examples/sample_data/HLS_B4.tif \
-  examples/sample_data/HLS_B3.tif \
-  examples/sample_data/HLS_B2.tif
+  examples/sample_data/HLS_B04.tif \
+  examples/sample_data/HLS_B03.tif \
+  examples/sample_data/HLS_B02.tif
 
 ```
 
@@ -57,7 +57,7 @@ viewtif --rgbfiles \
 ## Example Data
 - ECOSTRESS_LST.tif
 - Zip_Codes.shp and associated files
-- HLS_B4.tif, HLS_B3.tif, HLS_B2.tif (RGB sample)
+- HLS_B04.tif, HLS_B03.tif, HLS_B02.tif (RGB sample)
 
 ## Credit & License
 `viewtif` was inspired by the NASA JPL Thermal Viewer — Semi-Automated Georeferencer (GeoViewer v1.12) developed by Jake Longenecker (University of Miami Rosenstiel School of Marine, Atmospheric & Earth Science) while at the NASA Jet Propulsion Laboratory, California Institute of Technology, with inspiration from JPL’s ECOSTRESS geolocation batch workflow by Andrew Alamillo. The original GeoViewer was released under the MIT License (2025) and may be freely adapted with citation.
