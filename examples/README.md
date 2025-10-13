@@ -7,7 +7,7 @@ After installing viewtif, run:
 
 ```bash
 viewtif examples/sample_data/ECOSTRESS_LST.tif
-viewtif examples/sample_data/ECOSTRESS_LST.tif --shapefile examples/Parcels_Public.shp
+viewtif examples/sample_data/ECOSTRESS_LST.tif --shapefile examples/Zip_Codes.shp
 viewtif --rgbfiles examples/sample_data/HLS_B4.tif examples/sample_data/HLS_B3.tif examples/sample_data/HLS_B2.tif
 ```
 
