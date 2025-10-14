@@ -1,4 +1,7 @@
 # viewtif
+[![Downloads](https://static.pepy.tech/badge/viewtif)](https://pepy.tech/project/viewtif)
+[![PyPI version](https://img.shields.io/pypi/v/viewtif)](https://pypi.org/project/viewtif/)
+[![Python versions](https://img.shields.io/pypi/pyversions/viewtif)](https://pypi.org/project/viewtif/)
 
 A lightweight GeoTIFF viewer for quick visualization directly from the command line.  
 
@@ -11,13 +14,17 @@ You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays i
 ```bash
 pip install viewtif
 ```
+> **Note:** On Linux, you may need python3-tk, libqt5gui5 or PySide6 dependencies.
+> 
+>`viewtif` requires a graphical display environment.  
+> It may not run properly on headless systems (e.g., HPC compute nodes or remote servers without X11 forwarding).
 
 If you want to enable shapefile overlays, install with optional dependencies:
 ```bash
 pip install "viewtif[geo]"
 ```
-Note for macOS(zsh) users:
-Make sure to include the quotes, or zsh will interpret it as a pattern.
+> **Note:** For macOS(zsh) users:
+> Make sure to include the quotes, or zsh will interpret it as a pattern.
 
 ## Quick Start
 ```bash
@@ -64,12 +71,12 @@ Note: As of v1.0.5, you can use your mouse or trackpad to zoom in and out.
 ## Credit & License
 `viewtif` was inspired by the NASA JPL Thermal Viewer — Semi-Automated Georeferencer (GeoViewer v1.12) developed by Jake Longenecker (University of Miami Rosenstiel School of Marine, Atmospheric & Earth Science) while at the NASA Jet Propulsion Laboratory, California Institute of Technology, with inspiration from JPL’s ECOSTRESS geolocation batch workflow by Andrew Alamillo. The original GeoViewer was released under the MIT License (2025) and may be freely adapted with citation.
 
-# Citation
-Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Purkis, Sam; Gleason, Art; Otis, Dan; Galdamez,Ileana; Meiseles, Jacquelyn. GeoViewer v1.12: NASA JPL Thermal Viewer—Semi-Automated Georeferencer User Guide & Reference Manual. Jet Propulsion Laboratory, California Institute of Technology, 2025. PDF.
+## Citation
+Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Purkis, Sam; Gleason, Art; Otis, Dan; Galdamez, Ileana; Meiseles, Jacquelyn. GeoViewer v1.12: NASA JPL Thermal Viewer—Semi-Automated Georeferencer User Guide & Reference Manual. Jet Propulsion Laboratory, California Institute of Technology, 2025. PDF.
 
-# License
+## License
 This project is released under the MIT License.
 
-# Contributors
+## Contributors
 - [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support
 
