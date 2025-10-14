@@ -56,6 +56,7 @@ except Exception:
 # -------------------------- QGraphicsView tweaks -------------------------- #
 class RasterView(QGraphicsView):
     def __init__(self, *args, **kwargs):
+        import numpy as np
         super().__init__(*args, **kwargs)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -101,6 +102,7 @@ class TiffViewer(QMainWindow):
         shapefiles: list[str] | None = None,
         shp_color: str = "white",
         shp_width: float = 2,
+        subset: int | None = None,
     ):
         super().__init__()
 
@@ -141,38 +143,118 @@ class TiffViewer(QMainWindow):
             self.tif_path = self.tif_path or (os.path.commonprefix([red, green, blue]) or red)
 
         elif tif_path:
-            with rasterio.open(tif_path) as src:
-                self._transform = src.transform
-                self._crs = src.crs
-                if rgb is not None:
-                    bands = [src.read(b, out_shape=(src.height // self._scale_arg, src.width // self._scale_arg))
-                             for b in rgb]
-                    arr = np.stack(bands, axis=-1).astype(np.float32)
-                    nd = src.nodata
-                    if nd is not None:
-                        arr[arr == nd] = np.nan
-                    self.data = arr
-                    self.band_count = 3
-                else:
-                    arr = src.read(
-                        self.band,
-                        out_shape=(src.height // self._scale_arg, src.width // self._scale_arg)
-                    ).astype(np.float32)
-                    nd = src.nodata
-                    if nd is not None:
-                        arr[arr == nd] = np.nan
-                    self.data = arr
-                    self.band_count = src.count
+            # --------------------- Detect HDF/HDF5 --------------------- #
+            if tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
+                try:
+                    from osgeo import gdal
+                    gdal.UseExceptions()
 
-                    # single-band display range (fast stats or fallback)
-                    try:
-                        stats = src.stats(self.band)
-                        if stats and stats.min is not None and stats.max is not None:
-                            self.vmin, self.vmax = stats.min, stats.max
-                        else:
-                            raise ValueError("No stats in file")
-                    except Exception:
-                        self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+                    ds = gdal.Open(tif_path)
+                    subs = ds.GetSubDatasets()
+
+                    if not subs:
+                        raise ValueError("No subdatasets found in HDF/HDF5 file.")
+
+                    print(f"Found {len(subs)} subdatasets in {os.path.basename(tif_path)}:")
+                    for i, (_, desc) in enumerate(subs):
+                        print(f"[{i}] {desc}")
+
+                    # Only list subsets if --subset not given
+                    if subset is None:
+                        print("\nUse --subset N to open a specific subdataset.")
+                        sys.exit(0)
+
+                    # Validate subset index
+                    if subset < 0 or subset >= len(subs):
+                        raise ValueError(f"Invalid subset index {subset}. Valid range: 0–{len(subs)-1}")
+
+                    sub_name, desc = subs[subset]
+                    print(f"\nOpening subdataset [{subset}]: {desc}")
+                    sub_ds = gdal.Open(sub_name)
+
+                    # --- Read once ---
+                    arr = sub_ds.ReadAsArray().astype(np.float32)
+                    #print(f"Raw array shape from GDAL: {arr.shape} (ndim={arr.ndim})")
+
+                    # --- Normalize shape ---
+                    arr = np.squeeze(arr)
+                    if arr.ndim == 3:
+                        # Convert from (bands, rows, cols) → (rows, cols, bands)
+                        arr = np.transpose(arr, (1, 2, 0))
+                        #print(f"Transposed to {arr.shape} (rows, cols, bands)")
+                    elif arr.ndim == 2:
+                        print("Single-band dataset.")
+                    else:
+                        raise ValueError(f"Unexpected array shape {arr.shape}")
+
+                    # --- Downsample large arrays for responsiveness ---
+                    h, w = arr.shape[:2]
+                    if h * w > 4_000_000:
+                        step = max(2, int((h * w / 4_000_000) ** 0.5))
+                        arr = arr[::step, ::step] if arr.ndim == 2 else arr[::step, ::step, :]
+                        print(f"⚠️ Large dataset preview: downsampled by {step}x")
+
+                    # --- Final assignments ---
+                    self.data = arr
+                    self._transform = None
+                    self._crs = None
+                    self.band_count = arr.shape[2] if arr.ndim == 3 else 1
+                    self.band_index = 0
+                    self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+
+                    if self.band_count > 1:
+                        print(f"This subdataset has {self.band_count} bands — switch with [ and ] keys.")
+                    else:
+                        print("This subdataset has 1 band.")
+
+                    # --- If user specified --band, start there ---
+                    if self.band and self.band <= self.band_count:
+                        self.band_index = self.band - 1
+                        print(f"Opening band {self.band}/{self.band_count}")
+                    else:
+                        self.band_index = 0
+
+                except ImportError:
+                    raise RuntimeError(
+                        "HDF support requires GDAL.\n"
+                        "Install it first (e.g., brew install gdal && pip install GDAL)"
+                    )
+
+            # --------------------- Regular GeoTIFF --------------------- #
+            else:
+                with rasterio.open(tif_path) as src:
+                    self._transform = src.transform
+                    self._crs = src.crs
+                    if rgb is not None:
+                        bands = [src.read(b, out_shape=(src.height // self._scale_arg, src.width // self._scale_arg))
+                                for b in rgb]
+                        arr = np.stack(bands, axis=-1).astype(np.float32)
+                        nd = src.nodata
+                        if nd is not None:
+                            arr[arr == nd] = np.nan
+                        self.data = arr
+                        self.band_count = 3
+                    else:
+                        arr = src.read(
+                            self.band,
+                            out_shape=(src.height // self._scale_arg, src.width // self._scale_arg)
+                        ).astype(np.float32)
+                        nd = src.nodata
+                        if nd is not None:
+                            arr[arr == nd] = np.nan
+                        self.data = arr
+                        self.band_count = src.count
+
+                        # single-band display range (fast stats or fallback)
+                        try:
+                            stats = src.stats(self.band)
+                            if stats and stats.min is not None and stats.max is not None:
+                                self.vmin, self.vmax = stats.min, stats.max
+                            else:
+                                raise ValueError("No stats in file")
+                        except Exception:
+                            self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+
         else:
             raise ValueError("Provide a TIFF path or --rgbfiles.")
 
@@ -339,6 +421,10 @@ class TiffViewer(QMainWindow):
             self.setWindowTitle(f"RGB ({', '.join(names)})")
         elif self.rgb_mode and self.rgb:
             self.setWindowTitle(f"RGB {self.rgb} — {os.path.basename(self.tif_path)}")
+        elif hasattr(self, "band_index"):
+            self.setWindowTitle(
+                f"Band {self.band_index + 1}/{self.band_count} — {os.path.basename(self.tif_path)}"
+            )
         else:
             self.setWindowTitle(f"Band {self.band}/{self.band_count} — {os.path.basename(self.tif_path)}")
 
@@ -371,10 +457,44 @@ class TiffViewer(QMainWindow):
             return rgb
 
     def update_pixmap(self):
-        rgb = self._render_rgb()
+        # --- Select display data ---
+        if hasattr(self, "band_index"):
+            # HDF or scientific multi-band
+            if self.data.ndim == 3:
+                a = self.data[:, :, self.band_index]
+            else:
+                a = self.data
+            rgb = None
+        else:
+            # Regular GeoTIFF (could be RGB or single-band)
+            if self.rgb_mode:  # user explicitly passed --rgb or --rgbtiles
+                rgb = self.data
+                a = None
+            else:
+                a = self.data
+                rgb = None
+        # ----------------------------
+
+        # --- Render image ---
+        if rgb is None:
+            # Grayscale rendering for single-band (scientific) data
+            finite = np.isfinite(a)
+            rng = max(np.nanmax(a) - np.nanmin(a), 1e-12)
+            norm = np.zeros_like(a, dtype=np.float32)
+            if np.any(finite):
+                norm[finite] = (a[finite] - np.nanmin(a)) / rng
+            norm = np.clip(norm, 0, 1)
+            norm = np.power(norm * self.contrast, self.gamma)
+            cmap = getattr(cm, self.cmap_name, cm.viridis)
+            rgb = (cmap(norm)[..., :3] * 255).astype(np.uint8)
+        else:
+            # True RGB mode (unchanged)
+            rgb = self._render_rgb()
+        # ----------------------
+
         h, w, _ = rgb.shape
         self._last_rgb = rgb
-        qimg = QImage(self._last_rgb.data, w, h, 3 * w, QImage.Format.Format_RGB888)
+        qimg = QImage(rgb.data, w, h, 3 * w, QImage.Format.Format_RGB888)
         pix = QPixmap.fromImage(qimg)
         if self.pixmap_item is None:
             self.pixmap_item = QGraphicsPixmapItem(pix)
@@ -433,13 +553,24 @@ class TiffViewer(QMainWindow):
             self.cmap_name, self.alt_cmap_name = self.alt_cmap_name, self.cmap_name
             self.update_pixmap()
 
-        # Band switch (single-band)
-        elif not self.rgb_mode and k == Qt.Key.Key_BracketRight:
-            new_band = self.band + 1 if self.band < self.band_count else 1
-            self.load_band(new_band)
-        elif not self.rgb_mode and k == Qt.Key.Key_BracketLeft:
-            new_band = self.band - 1 if self.band > 1 else self.band_count
-            self.load_band(new_band)
+        # Band switch
+        elif k == Qt.Key.Key_BracketRight:
+            if hasattr(self, "band_index"):  # HDF/NetCDF mode
+                self.band_index = (self.band_index + 1) % self.band_count
+                self.update_pixmap()
+                self.update_title()
+            elif not self.rgb_mode:  # GeoTIFF single-band mode
+                new_band = self.band + 1 if self.band < self.band_count else 1
+                self.load_band(new_band)
+
+        elif k == Qt.Key.Key_BracketLeft:
+            if hasattr(self, "band_index"):  # HDF/NetCDF mode
+                self.band_index = (self.band_index - 1) % self.band_count
+                self.update_pixmap()
+                self.update_title()
+            elif not self.rgb_mode:  # GeoTIFF single-band mode
+                new_band = self.band - 1 if self.band > 1 else self.band_count
+                self.load_band(new_band)
 
         elif k == Qt.Key.Key_R:
             self.contrast = 1.0
@@ -488,6 +619,7 @@ def run_viewer(
     shapefile=None,
     shp_color=None,
     shp_width=None,
+    subset=None,
 ):
     """Launch the TiffViewer app"""
     app = QApplication(sys.argv)
@@ -500,6 +632,7 @@ def run_viewer(
         shapefiles=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
+        subset=subset,
     )
     win.show()
     sys.exit(app.exec())
@@ -515,9 +648,9 @@ import click
 @click.option("--shapefile", multiple=True, type=str, help="One or more shapefiles to overlay")
 @click.option("--shp-color", default="white", show_default=True, help="Overlay color (name or #RRGGBB).")
 @click.option("--shp-width", default=1.0, show_default=True, type=float, help="Overlay line width (screen pixels).")
-def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width):
+@click.option("--subset", default=None, type=int, help="Open specific subdataset index in .hdf/.h5 file")
+def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, subset):
     """Lightweight GeoTIFF viewer."""
-
     # --- Warn early if shapefile requested but geopandas missing ---
     if shapefile and not HAVE_GEO:
         print(
@@ -535,8 +668,8 @@ def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width):
         shapefile=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
+        subset=subset,
     )
-
 
 if __name__ == "__main__":
     main()

@@ -14,39 +14,61 @@ You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays i
 ```bash
 pip install viewtif
 ```
-> **Note:** On Linux, you may need python3-tk, libqt5gui5 or PySide6 dependencies.
+> **Note:** On Linux, you may need python3-tk, libqt5gui5, or PySide6 dependencies.
 > 
 >`viewtif` requires a graphical display environment.  
 > It may not run properly on headless systems (e.g., HPC compute nodes or remote servers without X11 forwarding).
 
-If you want to enable shapefile overlays, install with optional dependencies:
+### Optional features
+#### Shapefile overlay support
 ```bash
 pip install "viewtif[geo]"
 ```
 > **Note:** For macOS(zsh) users:
 > Make sure to include the quotes, or zsh will interpret it as a pattern.
 
+#### HDF/HDF5 support
+```bash
+brew install gdal     # macOS
+sudo apt install gdal-bin python3-gdal  # Linux
+pip install GDAL
+```
+> **Note:** GDAL is required to open `.hdf`, .`h5`, and `.hdf5` files. If it’s missing, viewtif will display: `RuntimeError: HDF support requires GDAL.`
+
 ## Quick Start
 ```bash
 # View a GeoTIFF
-viewtif examples/sample_data/ECOSTRESS_LST.tif
-
-# View with shapefile overlay
-viewtif examples/sample_data/ECOSTRESS_LST.tif \
-  --shapefile examples/sample_data/Zip_Codes.shp
+viewtif ECOSTRESS_LST.tif
 
 # View an RGB composite
 viewtif --rgbfiles \
-  examples/sample_data/HLS_B04.tif \
-  examples/sample_data/HLS_B03.tif \
-  examples/sample_data/HLS_B02.tif
+  HLS_B04.tif \
+  HLS_B03.tif \
+  HLS_B02.tif
 
+# View with shapefile overlay
+viewtif ECOSTRESS_LST.tif \
+  --shapefile Zip_Codes.shp
 ```
+### Update in v1.0.6
+`viewtif` can open `.hdf`, `.h5`, and `.hdf5` files that contain multiple subdatasets. When opened, it lists available subdatasets and lets you view one by index. You can also specify a band to display (default is the first band) or change bands interactively with '[' and ']'.
+```bash
+# List subdatasets
+viewtif AG100.v003.33.-107.0001.h5
+
+# View a specific subdataset
+viewtif AG100.v003.33.-107.0001.h5 --subset 1
+
+# View a specific subdataset and band
+viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
+```
+> **Note:** Some datasets (perhaps the majority of .hdf files) lack CRS information encoded, so shapefile overlays may not work. In that case, viewtif will display:
+`[WARN] raster lacks CRS/transform; cannot place overlays.`
 
 ## Controls
 | Key                  | Action                                  |
 | -------------------- | --------------------------------------- |
-| `+` / `-`            | Zoom in / out                           |
+| `+` / `-` or mouse / trackpad            | Zoom in / out                           |
 | Arrow keys or `WASD` | Pan                                     |
 | `C` / `V`            | Increase / decrease contrast            |
 | `G` / `H`            | Increase / decrease gamma               |
@@ -54,11 +76,9 @@ viewtif --rgbfiles \
 | `[` / `]`            | Previous / next band (single-band only) |
 | `R`                  | Reset view                              |
 
-Note: As of v1.0.5, you can use your mouse or trackpad to zoom in and out.
-
 ## Features
-- Command-line driven GeoTIFF viewer
-- Supports single-band or RGB composite display.
+- Command-line driven GeoTIFF viewer.
+- Supports single-band, RGB composite, and HDF/HDF5 subdatasets.
 - Optional shapefile overlay for geographic context.
 - Adjustable contrast, gamma, and colormap.
 - Fast preview using rasterio and PySide6.
@@ -67,6 +87,7 @@ Note: As of v1.0.5, you can use your mouse or trackpad to zoom in and out.
 - ECOSTRESS_LST.tif
 - Zip_Codes.shp and associated files
 - HLS_B04.tif, HLS_B03.tif, HLS_B02.tif (RGB sample)
+- AG100.v003.33.-107.0001.h5 (HDF5 file)
 
 ## Credit & License
 `viewtif` was inspired by the NASA JPL Thermal Viewer — Semi-Automated Georeferencer (GeoViewer v1.12) developed by Jake Longenecker (University of Miami Rosenstiel School of Marine, Atmospheric & Earth Science) while at the NASA Jet Propulsion Laboratory, California Institute of Technology, with inspiration from JPL’s ECOSTRESS geolocation batch workflow by Andrew Alamillo. The original GeoViewer was released under the MIT License (2025) and may be freely adapted with citation.
