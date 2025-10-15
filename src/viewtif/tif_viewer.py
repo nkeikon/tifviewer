@@ -52,6 +52,33 @@ try:
 except Exception:
     HAVE_GEO = False
 
+def warn_if_large(tif_path, scale=1):
+    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF)."""
+    from osgeo import gdal
+    import os
+
+    try:
+        gdal.UseExceptions()
+        info = gdal.Info(tif_path, format="json")
+        width, height = info.get("size", [0, 0])
+        total_pixels = (width * height) / (scale ** 2)  # account for downsampling
+        size_mb = None
+        if os.path.exists(tif_path):
+            size_mb = os.path.getsize(tif_path) / (1024 ** 2)
+
+        # Only warn if the *effective* pixels remain large
+        if total_pixels > 20_000_000 and scale <= 5:
+            print(
+                f"[WARN] Large raster detected ({width}×{height}, ~{total_pixels/1e6:.1f}M effective pixels"
+                + (f", ~{size_mb:.1f} MB" if size_mb else "")
+                + "). Loading may freeze. Consider rerunning with --scale (e.g. --scale 10)."
+            )
+            ans = input("Proceed anyway? [y/N]: ").strip().lower()
+            if ans not in ("y", "yes"):
+                print("Cancelled.")
+                sys.exit(0)
+    except Exception as e:
+        print(f"[WARN] Could not pre-check raster size: {e}")
 
 # -------------------------- QGraphicsView tweaks -------------------------- #
 class RasterView(QGraphicsView):
@@ -143,6 +170,8 @@ class TiffViewer(QMainWindow):
             self.tif_path = self.tif_path or (os.path.commonprefix([red, green, blue]) or red)
 
         elif tif_path:
+                # --- Universal size check before loading ---
+            warn_if_large(tif_path, scale=self._scale_arg)
             # --------------------- Detect HDF/HDF5 --------------------- #
             if tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
                 try:
@@ -222,6 +251,9 @@ class TiffViewer(QMainWindow):
 
             # --------------------- Regular GeoTIFF --------------------- #
             else:
+                if os.path.dirname(tif_path).endswith(".gdb"):
+                    tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
                 with rasterio.open(tif_path) as src:
                     self._transform = src.transform
                     self._crs = src.crs
@@ -507,7 +539,13 @@ class TiffViewer(QMainWindow):
     def load_band(self, band_num: int):
         if self.rgb_mode:
             return
-        with rasterio.open(self.tif_path) as src:
+
+        tif_path = self.tif_path
+      
+        if os.path.dirname(self.tif_path).endswith(".gdb"):
+            tif_path = f"OpenFileGDB:{os.path.dirname(self.tif_path)}:{os.path.basename(self.tif_path)}"
+
+        with rasterio.open(tif_path) as src:
             self.band = band_num
             arr = src.read(self.band).astype(np.float32)
             nd = src.nodata
