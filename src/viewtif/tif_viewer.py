@@ -222,6 +222,9 @@ class TiffViewer(QMainWindow):
 
             # --------------------- Regular GeoTIFF --------------------- #
             else:
+                if os.path.dirname(tif_path).endswith(".gdb"):
+                    tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
                 with rasterio.open(tif_path) as src:
                     self._transform = src.transform
                     self._crs = src.crs
@@ -507,7 +510,13 @@ class TiffViewer(QMainWindow):
     def load_band(self, band_num: int):
         if self.rgb_mode:
             return
-        with rasterio.open(self.tif_path) as src:
+
+        tif_path = self.tif_path
+      
+        if os.path.dirname(self.tif_path).endswith(".gdb"):
+            tif_path = f"OpenFileGDB:{os.path.dirname(self.tif_path)}:{os.path.basename(self.tif_path)}"
+
+        with rasterio.open(tif_path) as src:
             self.band = band_num
             arr = src.read(self.band).astype(np.float32)
             nd = src.nodata
