@@ -170,6 +170,26 @@ class TiffViewer(QMainWindow):
             self.tif_path = self.tif_path or (os.path.commonprefix([red, green, blue]) or red)
 
         elif tif_path:
+            # ---------------- Handle File Geodatabase (.gdb) ---------------- #
+            if tif_path.lower().endswith(".gdb") and ":" not in tif_path:
+                import re, subprocess
+                gdb_path = tif_path  # use full path to .gdb
+                try:
+                    out = subprocess.check_output(["gdalinfo", "-norat", gdb_path], text=True)
+                    rasters = re.findall(r"RASTER_DATASET=(\S+)", out)
+                    if not rasters:
+                        print(f"[WARN] No raster datasets found in {os.path.basename(gdb_path)}.")
+                        sys.exit(0)
+                    else:
+                        print(f"Found {len(rasters)} raster dataset{'s' if len(rasters) > 1 else ''}:")
+                        for i, r in enumerate(rasters):
+                            print(f"[{i}] {r}")
+                        print("\nUse one of these names to open. For example, to open the first raster:")
+                        print(f'viewtif "OpenFileGDB:{gdb_path}:{rasters[0]}"')
+                        sys.exit(0)
+                except subprocess.CalledProcessError as e:
+                    print(f"[WARN] Could not inspect FileGDB: {e}")
+                    sys.exit(0)
                 # --- Universal size check before loading ---
             warn_if_large(tif_path, scale=self._scale_arg)
             # --------------------- Detect HDF/HDF5 --------------------- #
