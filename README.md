@@ -67,12 +67,16 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 
 ### Update in v1.0.7: File Geodatabase (.gdb) support
 `viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`), using the GDAL `OpenFileGDB` driver.  
+When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
 
 ```bash
-# Example
+# List available raster datasets
+viewtif /path/to/geodatabase.gdb
+
+# Open a specific raster
 viewtif "OpenFileGDB:/path/to/geodatabase.gdb:RasterName"
 ```
-> **Note:** Requires GDAL 3.7 or later with the OpenFileGDB driver enabled. The .gdb path and raster name must be separated by a colon (:).
+> **Note:** Requires GDAL 3.7 or later with the OpenFileGDB driver enabled. If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
 
 ### Update in v1.0.7: Large raster safeguard
 As of v1.0.7, `viewtif` automatically checks the raster size before loading.  
