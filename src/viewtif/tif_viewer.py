@@ -57,6 +57,9 @@ def warn_if_large(tif_path, scale=1):
     from osgeo import gdal
     import os
 
+    if os.path.dirname(tif_path).endswith(".gdb"):
+        tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
     try:
         gdal.UseExceptions()
         info = gdal.Info(tif_path, format="json")
@@ -699,7 +702,7 @@ import click
 
 @click.command()
 @click.version_option("1.0.9", prog_name="viewtif")
-@click.argument("tif_path", required=False)
+@click.argument("tif_path", required=True)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
 @click.option("--rgb", nargs=3, type=int, help="Three band numbers for RGB, e.g. --rgb 4 3 2")
