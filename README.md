@@ -50,7 +50,7 @@ viewtif --rgbfiles \
 viewtif ECOSTRESS_LST.tif \
   --shapefile Zip_Codes.shp
 ```
-### Update in v1.0.6
+### Update in v1.0.6: HDF/HDF5 support
 `viewtif` can open `.hdf`, `.h5`, and `.hdf5` files that contain multiple subdatasets. When opened, it lists available subdatasets and lets you view one by index. You can also specify a band to display (default is the first band) or change bands interactively with '[' and ']'.
 ```bash
 # List subdatasets
@@ -64,6 +64,46 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 ```
 > **Note:** Some datasets (perhaps the majority of .hdf files) lack CRS information encoded, so shapefile overlays may not work. In that case, viewtif will display:
 `[WARN] raster lacks CRS/transform; cannot place overlays.`
+
+### Update in v1.0.7: File Geodatabase (.gdb) support
+`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`), using the GDAL `OpenFileGDB` driver.  
+When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
+
+```bash
+# List available raster datasets
+viewtif /path/to/geodatabase.gdb
+
+# Open a specific raster
+viewtif "OpenFileGDB:/path/to/geodatabase.gdb:RasterName"
+```
+> **Note:** Requires GDAL 3.7 or later with the OpenFileGDB driver enabled. If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
+
+### Update in v1.0.7: Large raster safeguard
+As of v1.0.7, `viewtif` automatically checks the raster size before loading.  
+If the dataset is very large (e.g., >20 million pixels), it will pause and warn that loading may freeze your system.  
+You can proceed manually or rerun with the `--scale` option for a smaller, faster preview.
+
+
+
+### Update in v0.2.0: NetCDF support with optional cartopy visualization
+`viewtif` now supports NetCDF (`.nc`) files with xarray and optional cartopy geographic visualization. NetCDF support is optional to keep the base installation lightweight.
+
+#### Installation with NetCDF support
+```bash
+pip install "viewtif[netcdf]"
+```
+
+#### Examples
+```bash
+viewtif data.nc
+```
+
+> **Note:** NetCDF support is optional. If xarray or netCDF4 is missing, viewtif will display:  
+> `NetCDF support requires additional dependencies. Install them with: pip install viewtif[netcdf]`
+> 
+> **Cartopy visualization:** For enhanced geographic visualization with map projections, coastlines, and borders, install with cartopy:  
+> `pip install "viewtif[netcdf]"` (cartopy is included in the netcdf extra)  
+> If cartopy is not available, netCDF files will still display with standard RGB rendering.
 
 ## Controls
 | Key                  | Action                                  |
@@ -100,3 +140,4 @@ This project is released under the MIT License.
 
 ## Contributors
 - [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support
+- [@p-vdp](https://github.com/p-vdp) — added File Geodatabase (.gdb) raster support

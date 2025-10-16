@@ -54,18 +54,65 @@ try:
 except Exception:
     HAVE_GEO = False
 
-# Required NetCDF deps
-import xarray as xr
-import pandas as pd
+# Optional NetCDF deps (lazy-loaded when needed)
+HAVE_NETCDF = False
+xr = None
+pd = None
 
-# Optional cartopy deps for better map visualization
+# Optional cartopy deps for better map visualization (lazy-loaded when needed)
+# Check if cartopy is available but don't import yet
 try:
-    import cartopy.crs as ccrs
-    import cartopy.feature as cfeature
-    HAVE_CARTOPY = True
+    import importlib.util
+    HAVE_CARTOPY = importlib.util.find_spec("cartopy") is not None
 except Exception:
     HAVE_CARTOPY = False
 
+def warn_if_large(tif_path, scale=1):
+    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF).
+    
+    Uses GDAL if available, falls back to rasterio for standard formats.
+    """
+    import os
+
+    try:
+        width, height = None, None
+        
+        # Try GDAL first (supports more formats including GDB, HDF)
+        try:
+            from osgeo import gdal
+            gdal.UseExceptions()
+            info = gdal.Info(tif_path, format="json")
+            width, height = info.get("size", [0, 0])
+        except ImportError:
+            # GDAL not available, try rasterio for standard formats
+            try:
+                with rasterio.open(tif_path) as src:
+                    width = src.width
+                    height = src.height
+            except Exception:
+                # If rasterio also fails, skip the check
+                print(f"[INFO] Could not determine raster dimensions for size check.")
+                return
+        
+        if width and height:
+            total_pixels = (width * height) / (scale ** 2)  # account for downsampling
+            size_mb = None
+            if os.path.exists(tif_path):
+                size_mb = os.path.getsize(tif_path) / (1024 ** 2)
+
+            # Only warn if the *effective* pixels remain large
+            if total_pixels > 20_000_000 and scale <= 5:
+                print(
+                    f"[WARN] Large raster detected ({width}×{height}, ~{total_pixels/1e6:.1f}M effective pixels"
+                    + (f", ~{size_mb:.1f} MB" if size_mb else "")
+                    + "). Loading may freeze. Consider rerunning with --scale (e.g. --scale 10)."
+                )
+                ans = input("Proceed anyway? [y/N]: ").strip().lower()
+                if ans not in ("y", "yes"):
+                    print("Cancelled.")
+                    sys.exit(0)
+    except Exception as e:
+        print(f"[INFO] Could not pre-check raster size: {e}")
 
 # -------------------------- QGraphicsView tweaks -------------------------- #
 class RasterView(QGraphicsView):
@@ -139,7 +186,8 @@ class TiffViewer(QMainWindow):
         # --- Load data ---
         if rgbfiles:
             red, green, blue = rgbfiles
-            with rasterio.open(red) as r, rasterio.open(green) as g, rasterio.open(blue) as b:
+            import rasterio as rio_module
+            with rio_module.open(red) as r, rio_module.open(green) as g, rio_module.open(blue) as b:
                 if (r.width, r.height) != (g.width, g.height) or (r.width, r.height) != (b.width, b.height):
                     raise ValueError("All RGB files must have the same dimensions.")
                 arr = np.stack([
@@ -159,7 +207,11 @@ class TiffViewer(QMainWindow):
         elif tif_path:
             # --------------------- Detect NetCDF --------------------- #
             if tif_path.lower().endswith((".nc", ".netcdf")):
-                try:                    
+                try:
+                    # Lazy-load NetCDF dependencies
+                    import xarray as xr
+                    import pandas as pd
+                    
                     # Open the NetCDF file
                     ds = xr.open_dataset(tif_path)
                     
@@ -282,12 +334,47 @@ class TiffViewer(QMainWindow):
                     # Enable cartopy visualization if available
                     self._use_cartopy = HAVE_CARTOPY and self._has_geo_coords
                     
+                except ImportError as e:
+                    if "xarray" in str(e) or "netCDF4" in str(e):
+                        raise RuntimeError(
+                            f"NetCDF support requires additional dependencies.\n"
+                            f"Install them with: pip install viewtif[netcdf]\n"
+                            f"Original error: {str(e)}"
+                        )
+                    else:
+                        raise RuntimeError(f"Error reading NetCDF file: {str(e)}")
                 except Exception as e:
                     raise RuntimeError(f"Error reading NetCDF file: {str(e)}")
             
+            # ---------------- Handle File Geodatabase (.gdb) ---------------- #
+            if tif_path.lower().endswith(".gdb") and ":" not in tif_path:
+                import re, subprocess
+                gdb_path = tif_path  # use full path to .gdb
+                try:
+                    out = subprocess.check_output(["gdalinfo", "-norat", gdb_path], text=True)
+                    rasters = re.findall(r"RASTER_DATASET=(\S+)", out)
+                    if not rasters:
+                        print(f"[WARN] No raster datasets found in {os.path.basename(gdb_path)}.")
+                        sys.exit(0)
+                    else:
+                        print(f"Found {len(rasters)} raster dataset{'s' if len(rasters) > 1 else ''}:")
+                        for i, r in enumerate(rasters):
+                            print(f"[{i}] {r}")
+                        print("\nUse one of these names to open. For example, to open the first raster:")
+                        print(f'viewtif "OpenFileGDB:{gdb_path}:{rasters[0]}"')
+                        sys.exit(0)
+                except subprocess.CalledProcessError as e:
+                    print(f"[WARN] Could not inspect FileGDB: {e}")
+                    sys.exit(0)
+                # --- Universal size check before loading ---
+            warn_if_large(tif_path, scale=self._scale_arg)
+            
+            if False:  # Placeholder for previous if condition
+                pass
             # --------------------- Detect HDF/HDF5 --------------------- #
             elif tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
                 try:
+                    # Try GDAL first (best support for HDF subdatasets)
                     from osgeo import gdal
                     gdal.UseExceptions()
 
@@ -356,14 +443,70 @@ class TiffViewer(QMainWindow):
                         self.band_index = 0
 
                 except ImportError:
-                    raise RuntimeError(
-                        "HDF support requires GDAL.\n"
-                        "Install it first (e.g., brew install gdal && pip install GDAL)"
-                    )
+                    # GDAL not available, try rasterio as fallback for NetCDF
+                    print("[INFO] GDAL not available, attempting to read HDF/NetCDF with rasterio...")
+                    try:
+                        import rasterio as rio
+                        with rio.open(tif_path) as src:
+                            print(f"[INFO] NetCDF file opened via rasterio")
+                            print(f"[INFO] Data shape: {src.height} x {src.width} x {src.count} bands")
+                            
+                            if src.count == 0:
+                                raise ValueError("No bands found in NetCDF file.")
+                            
+                            # Determine which band(s) to read
+                            if self.band and self.band <= src.count:
+                                band_indices = [self.band]
+                                print(f"Opening band {self.band}/{src.count}")
+                            elif rgb and all(b <= src.count for b in rgb):
+                                band_indices = rgb
+                                print(f"Opening bands {rgb} as RGB")
+                            else:
+                                band_indices = list(range(1, min(src.count + 1, 4)))  # Read up to 3 bands
+                                print(f"Opening bands {band_indices}")
+                            
+                            # Read selected bands
+                            bands = []
+                            for b in band_indices:
+                                band_data = src.read(b, out_shape=(src.height // self._scale_arg, src.width // self._scale_arg))
+                                bands.append(band_data)
+                            
+                            # Stack into array
+                            arr = np.stack(bands, axis=-1).astype(np.float32) if len(bands) > 1 else bands[0].astype(np.float32)
+                            
+                            # Handle no-data values
+                            nd = src.nodata
+                            if nd is not None:
+                                if arr.ndim == 3:
+                                    arr[arr == nd] = np.nan
+                                else:
+                                    arr[arr == nd] = np.nan
+                            
+                            # Final assignments
+                            self.data = arr
+                            self._transform = src.transform
+                            self._crs = src.crs
+                            self.band_count = arr.shape[2] if arr.ndim == 3 else 1
+                            self.band_index = 0
+                            self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+                            
+                            if self.band_count > 1:
+                                print(f"Loaded {self.band_count} bands — switch with [ and ] keys.")
+                            else:
+                                print("Loaded 1 band.")
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to read HDF/NetCDF file: {e}\n"
+                            "For full HDF support, install GDAL: pip install GDAL"
+                        )
 
             # --------------------- Regular GeoTIFF --------------------- #
             else:
-                with rasterio.open(tif_path) as src:
+                if os.path.dirname(tif_path).endswith(".gdb"):
+                    tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
+                import rasterio as rio_module
+                with rio_module.open(tif_path) as src:
                     self._transform = src.transform
                     self._crs = src.crs
                     if rgb is not None:
@@ -662,6 +805,8 @@ class TiffViewer(QMainWindow):
         try:
             # Handle numpy datetime64
             if hasattr(time_value, 'dtype') and np.issubdtype(time_value.dtype, np.datetime64):
+                # Lazy-load pandas for timestamp conversion
+                import pandas as pd
                 # Convert to Python datetime if possible
                 dt = pd.Timestamp(time_value).to_pydatetime()
                 time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -1029,7 +1174,14 @@ class TiffViewer(QMainWindow):
     def load_band(self, band_num: int):
         if self.rgb_mode:
             return
-        with rasterio.open(self.tif_path) as src:
+
+        tif_path = self.tif_path
+      
+        if os.path.dirname(self.tif_path).endswith(".gdb"):
+            tif_path = f"OpenFileGDB:{os.path.dirname(self.tif_path)}:{os.path.basename(self.tif_path)}"
+
+        import rasterio as rio_module
+        with rio_module.open(tif_path) as src:
             self.band = band_num
             arr = src.read(self.band).astype(np.float32)
             nd = src.nodata
@@ -1186,7 +1338,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("1.0.6", prog_name="viewtif")
+@click.version_option("1.0.9", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
