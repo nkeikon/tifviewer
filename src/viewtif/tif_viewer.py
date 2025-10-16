@@ -57,6 +57,9 @@ def warn_if_large(tif_path, scale=1):
     from osgeo import gdal
     import os
 
+    if os.path.dirname(tif_path).endswith(".gdb"):
+        tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
     try:
         gdal.UseExceptions()
         info = gdal.Info(tif_path, format="json")
