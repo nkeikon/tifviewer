@@ -1,11 +1,15 @@
 # viewtif
 [![Downloads](https://static.pepy.tech/badge/viewtif)](https://pepy.tech/project/viewtif)
 [![PyPI version](https://img.shields.io/pypi/v/viewtif)](https://pypi.org/project/viewtif/)
-[![Python versions](https://img.shields.io/pypi/pyversions/viewtif)](https://pypi.org/project/viewtif/)
 
 A lightweight GeoTIFF viewer for quick visualization directly from the command line.  
 
 You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays in a simple Qt-based window.
+
+---
+
+**Latest stable release:** [v0.1.9 on PyPI](https://pypi.org/project/viewtif/)  
+**Latest development:** main branch ([v0.2.0, experimental](https://github.com/nkeikon/viewtif))
 
 ---
 
