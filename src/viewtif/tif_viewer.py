@@ -678,7 +678,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("1.0.6", prog_name="viewtif")
+@click.version_option("1.0.8", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
