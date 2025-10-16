@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viewtif"
-version = "0.1.8"
+version = "0.1.9"
 description = "Lightweight GeoTIFF, HDF/HDF5, and Esri File Geodatabase (.gdb) viewer with shapefile overlay and large-raster safeguard."
 readme = "README.md"
 requires-python = ">=3.9"
