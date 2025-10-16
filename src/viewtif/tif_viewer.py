@@ -74,6 +74,10 @@ def warn_if_large(tif_path, scale=1):
     """
     import os
 
+    if tif_path and os.path.dirname(tif_path).endswith(".gdb"):
+        tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
+
+
     try:
         width, height = None, None
         
@@ -206,7 +210,7 @@ class TiffViewer(QMainWindow):
 
         elif tif_path:
             # --------------------- Detect NetCDF --------------------- #
-            if tif_path.lower().endswith((".nc", ".netcdf")):
+            if tif_path and tif_path.lower().endswith((".nc", ".netcdf")):
                 try:
                     # Lazy-load NetCDF dependencies
                     import xarray as xr
@@ -347,7 +351,7 @@ class TiffViewer(QMainWindow):
                     raise RuntimeError(f"Error reading NetCDF file: {str(e)}")
             
             # ---------------- Handle File Geodatabase (.gdb) ---------------- #
-            if tif_path.lower().endswith(".gdb") and ":" not in tif_path:
+            if tif_path and tif_path.lower().endswith(".gdb") and ":" not in tif_path:
                 import re, subprocess
                 gdb_path = tif_path  # use full path to .gdb
                 try:
@@ -372,7 +376,7 @@ class TiffViewer(QMainWindow):
             if False:  # Placeholder for previous if condition
                 pass
             # --------------------- Detect HDF/HDF5 --------------------- #
-            elif tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
+            elif tif_path and tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
                 try:
                     # Try GDAL first (best support for HDF subdatasets)
                     from osgeo import gdal
@@ -502,7 +506,7 @@ class TiffViewer(QMainWindow):
 
             # --------------------- Regular GeoTIFF --------------------- #
             else:
-                if os.path.dirname(tif_path).endswith(".gdb"):
+                if tif_path and os.path.dirname(tif_path).endswith(".gdb"):
                     tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
 
                 import rasterio as rio_module
@@ -551,7 +555,7 @@ class TiffViewer(QMainWindow):
 
         # Colormap (single-band)
         # For NetCDF temperature data, have three colormaps in rotation
-        if tif_path.lower().endswith(('.nc', '.netcdf')):
+        if tif_path and tif_path.lower().endswith(('.nc', '.netcdf')):
             self.cmap_names = ["RdBu_r", "viridis", "magma"]  # three colormaps for NetCDF
             self.cmap_index = 0  # start with RdBu_r
             self.cmap_name = self.cmap_names[self.cmap_index]
@@ -1177,7 +1181,7 @@ class TiffViewer(QMainWindow):
 
         tif_path = self.tif_path
       
-        if os.path.dirname(self.tif_path).endswith(".gdb"):
+        if tif_path and os.path.dirname(self.tif_path).endswith(".gdb"):
             tif_path = f"OpenFileGDB:{os.path.dirname(self.tif_path)}:{os.path.basename(self.tif_path)}"
 
         import rasterio as rio_module
@@ -1338,7 +1342,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("1.0.9", prog_name="viewtif")
+@click.version_option("0.2.0", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
