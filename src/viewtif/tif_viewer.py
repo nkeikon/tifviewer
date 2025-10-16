@@ -1081,15 +1081,42 @@ class TiffViewer(QMainWindow):
         norm_data = np.power(norm_data, self.gamma)
         norm_data = norm_data * rng + vmin
         
-        # Create the plot
-        contour = ax.contourf(lons, lats, data, 
+        # Downsample coordinates to match downsampled data shape
+        # data shape is (lat_samples, lon_samples) after downsampling
+        data_height, data_width = data.shape[:2]
+        lat_samples = len(lats)
+        lon_samples = len(lons)
+        
+        # Calculate downsampling step if needed
+        lat_step = max(1, lat_samples // data_height)
+        lon_step = max(1, lon_samples // data_width)
+        
+        # Downsample coordinate arrays to match data
+        lats_downsampled = lats[::lat_step][:data_height]
+        lons_downsampled = lons[::lon_step][:data_width]
+        
+        # Convert 0-360 longitude to -180 to 180 if needed
+        if lons_downsampled.max() > 180:
+            lons_downsampled = ((lons_downsampled + 180) % 360) - 180
+        
+        # Create 2D meshgrid for proper coordinate alignment with cartopy
+        lon_grid, lat_grid = np.meshgrid(lons_downsampled, lats_downsampled, indexing='xy')
+        
+        # Create the plot with 2D meshgrid for proper coordinate alignment
+        contour = ax.contourf(lon_grid, lat_grid, data, 
                             transform=ccrs.PlateCarree(),
                             levels=levels, cmap=cmap)
         
+        # Set map extent based on actual downsampled coordinates
+        lon_min, lon_max = lons_downsampled.min(), lons_downsampled.max()
+        lat_min, lat_max = lats_downsampled.min(), lats_downsampled.max()
+        ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+        
         # Add map features
-        ax.coastlines()
-        ax.add_feature(cfeature.BORDERS, linestyle=':')
-        ax.gridlines(draw_labels=True)
+        ax.coastlines(resolution='50m', linewidth=0.5)
+        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.5)
+        ax.add_feature(cfeature.STATES, linestyle='-', linewidth=0.3, alpha=0.5)
+        ax.gridlines(draw_labels=True, alpha=0.3)
         
         # Add title with variable name and time if available
         title = f"{self._nc_var_name}"
