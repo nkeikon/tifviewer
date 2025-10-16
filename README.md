@@ -83,8 +83,6 @@ As of v1.0.7, `viewtif` automatically checks the raster size before loading.
 If the dataset is very large (e.g., >20 million pixels), it will pause and warn that loading may freeze your system.  
 You can proceed manually or rerun with the `--scale` option for a smaller, faster preview.
 
-
-
 ### Update in v0.2.0: NetCDF support with optional cartopy visualization
 `viewtif` now supports NetCDF (`.nc`) files with xarray and optional cartopy geographic visualization. NetCDF support is optional to keep the base installation lightweight.
 
