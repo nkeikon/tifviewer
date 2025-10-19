@@ -8,6 +8,11 @@ A lightweight GeoTIFF viewer for quick visualization directly from the command l
 You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays in a simple Qt-based window.
 
 ---
+Latest stable release: v0.1.9 (PyPI)
+
+Development branch: v0.2.0-dev (experimental, not released)
+
+---
 
 ## Installation
 
@@ -67,7 +72,7 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 
 ### Update in v1.0.7: File Geodatabase (.gdb) support
 `viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`), using the GDAL `OpenFileGDB` driver.  
-When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
+When you open a .gdb directly, `viewtif` will list available raster datasets first, then you can choose one to view.
 
 ```bash
 # List available raster datasets
