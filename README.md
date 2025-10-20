@@ -4,14 +4,8 @@
 
 A lightweight GeoTIFF viewer for quick visualization directly from the command line.  
 
-You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays in a simple Qt-based window.
+You can visualize single-band GeoTIFFs, RGB composites, HDF, NetCDF files and shapefile overlays in a simple Qt-based window.
 
----
-
-**Latest stable release:** [v0.1.9 on PyPI](https://pypi.org/project/viewtif/)  
-**Latest development:** main branch ([v0.2.0, experimental](https://github.com/nkeikon/viewtif))
-
----
 
 ## Installation
 
@@ -70,8 +64,11 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 `[WARN] raster lacks CRS/transform; cannot place overlays.`
 
 ### Update in v1.0.7: File Geodatabase (.gdb) support
-`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`), using the GDAL `OpenFileGDB` driver.  
-When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
+`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`). When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
+
+Most Rasterio installations already include the OpenFileGDB driver, so .gdb datasets often open without installing GDAL manually.
+
+If you encounter: RuntimeError: GDB support requires GDAL, install GDAL as shown above to enable the driver.
 
 ```bash
 # List available raster datasets
@@ -115,12 +112,12 @@ viewtif data.nc
 | `C` / `V`            | Increase / decrease contrast            |
 | `G` / `H`            | Increase / decrease gamma               |
 | `M`                  | Toggle colormap (`viridis` ↔ `magma`)   |
-| `[` / `]`            | Previous / next band (single-band only) |
+| `[` / `]`            | Previous / next band (or time step)     |
 | `R`                  | Reset view                              |
 
 ## Features
 - Command-line driven GeoTIFF viewer.
-- Supports single-band, RGB composite, and HDF/HDF5 subdatasets.
+- Supports single-band, RGB composite, HDF/HDF5 subdatasets, and NetCDF.
 - Optional shapefile overlay for geographic context.
 - Adjustable contrast, gamma, and colormap.
 - Fast preview using rasterio and PySide6.
@@ -141,5 +138,5 @@ Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Purkis
 This project is released under the MIT License.
 
 ## Contributors
-- [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support
+- [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support; added NetCDF support with [@nkeikon](https://github.com/nkeikon) 
 - [@p-vdp](https://github.com/p-vdp) — added File Geodatabase (.gdb) raster support

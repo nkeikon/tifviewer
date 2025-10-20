@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-TIFF Viewer (PySide6) — RGB (2–98% global stretch) + Shapefile overlays
+TIFF Viewer (PySide6) — view GeoTIFF, NetCDF, and HDF datasets with shapefile overlays.
 
-Features
+Features:
 - Open GeoTIFFs (single or multi-band)
-- Combine separate single-band TIFFs into RGB (--rgbfiles R.tif G.tif B.tif)
-- QGIS-like RGB display using global 2–98 percentile stretch
-- Single-band view with contrast/gamma + colormap toggle (viridis <-> magma)
-- Pan & zoom
-- Switch bands with [ and ] (single-band)
-- Overlay one or more shapefiles reprojected to raster CRS
-- Z/M tolerant: ignores Z or M coords in shapefiles
+- Combine separate single-band TIFFs into RGB
+- Apply global 2–98% stretch for RGB
+- Display NetCDF/HDF subsets with consistent scaling
+- Overlay shapefiles automatically reprojected to raster CRS
+- Navigate bands/time steps interactively
 
 Controls
   + / - : zoom in/out
@@ -18,7 +16,7 @@ Controls
   C / V : increase/decrease contrast (works in RGB and single-band)
   G / H : increase/decrease gamma    (works in RGB and single-band)
   M     : toggle colormap (viridis <-> magma) — single-band only
-  [ / ] : previous / next band (single-band)
+  [ / ] : previous / next band (or time step) (single-band)
   R     : reset view
 
 Examples
@@ -35,13 +33,16 @@ import rasterio
 from rasterio.transform import Affine
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, 
-    QScrollBar, QGraphicsPathItem, QVBoxLayout, QHBoxLayout, QSlider, QLabel, 
-    QWidget, QStatusBar, QPushButton, QComboBox
+    QScrollBar, QGraphicsPathItem, QVBoxLayout, QHBoxLayout, QWidget, QStatusBar
 )
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath
-from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtCore import Qt
 
 import matplotlib.cm as cm
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="shapely")
+
+__version__ = "0.2.0"
 
 # Optional overlay deps
 try:
@@ -263,9 +264,14 @@ class TiffViewer(QMainWindow):
                     if 'time' in var_data.dims:
                         self._has_time_dim = True
                         self._time_dim_name = 'time'
-                        self._time_values = ds.time.values
-                        self._time_index = time_index
-                        
+                        self._time_values = ds['time'].values
+                        self._time_index = 0
+                        print(f"NetCDF time dimension detected: {len(self._time_values)} steps")
+
+                        self.band_count = var_data.sizes['time']
+                        self.band_index = 0
+                        self._time_dim_name = 'time'
+
                         # Try to format time values for better display
                         time_units = getattr(ds.time, 'units', None)
                         time_calendar = getattr(ds.time, 'calendar', 'standard')
@@ -388,12 +394,11 @@ class TiffViewer(QMainWindow):
                     if not subs:
                         raise ValueError("No subdatasets found in HDF/HDF5 file.")
 
-                    print(f"Found {len(subs)} subdatasets in {os.path.basename(tif_path)}:")
-                    for i, (_, desc) in enumerate(subs):
-                        print(f"[{i}] {desc}")
-
                     # Only list subsets if --subset not given
                     if subset is None:
+                        print(f"Found {len(subs)} subdatasets in {os.path.basename(tif_path)}:")
+                        for i, (_, desc) in enumerate(subs):
+                            print(f"[{i}] {desc}")
                         print("\nUse --subset N to open a specific subdataset.")
                         sys.exit(0)
 
@@ -572,64 +577,6 @@ class TiffViewer(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
-        # Add time navigation controls at the top for NetCDF files
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            self.time_layout = QHBoxLayout()
-            self.time_layout.setContentsMargins(10, 5, 10, 5)
-            
-            # Navigation buttons
-            self.prev_button = QPushButton("<<")
-            self.prev_button.setToolTip("Previous time step")
-            self.prev_button.clicked.connect(self.prev_time_step)
-            self.prev_button.setFixedWidth(40)
-            
-            # Play/Pause button
-            self.play_button = QPushButton("▶")  # Play symbol
-            self.play_button.setToolTip("Play/Pause time animation")
-            self.play_button.clicked.connect(self.toggle_play_pause)
-            self.play_button.setFixedWidth(40)
-            self._is_playing = False
-            self._play_timer = None
-            
-            self.next_button = QPushButton(">>")
-            self.next_button.setToolTip("Next time step")
-            self.next_button.clicked.connect(self.next_time_step)
-            self.next_button.setFixedWidth(40)
-            
-            # Date/time label
-            self.time_label = QLabel()
-            self.time_label.setMinimumWidth(200)
-            
-            # Time slider
-            self.time_slider = QSlider(Qt.Orientation.Horizontal)
-            self.time_slider.setMinimum(0)
-            self.time_slider.setMaximum(len(self._time_values) - 1)
-            self.time_slider.setValue(self._time_index)
-            self.time_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-            self.time_slider.setTickInterval(max(1, len(self._time_values) // 10))
-            self.time_slider.valueChanged.connect(self.time_slider_changed)
-            
-            # Date time combo box
-            self.date_combo = QComboBox()
-            self.populate_date_combo()
-            self.date_combo.currentIndexChanged.connect(self.date_combo_changed)
-            self.date_combo.setFixedWidth(200)
-            
-            # Add controls to layout
-            self.time_layout.addWidget(self.prev_button)
-            self.time_layout.addWidget(self.play_button)
-            self.time_layout.addWidget(self.time_label)
-            self.time_layout.addWidget(self.time_slider, 1)  # 1 = stretch factor
-            self.time_layout.addWidget(self.next_button)
-            self.time_layout.addWidget(QLabel("Jump to:"))
-            self.time_layout.addWidget(self.date_combo)
-            
-            # Add time controls to main layout at the top
-            self.main_layout.addLayout(self.time_layout)
-            
-            # Update time label
-            self.update_time_label()
-        
         # Scene + view
         self.scene = QGraphicsScene(self)
         self.view = RasterView(self.scene, self)
@@ -643,6 +590,8 @@ class TiffViewer(QMainWindow):
 
         self.pixmap_item = None
         self._last_rgb = None
+
+        # --- Initial render ---
         self.update_pixmap()
 
         # Overlays (if any)
@@ -780,27 +729,110 @@ class TiffViewer(QMainWindow):
 
     # ----------------------- Title / Rendering ----------------------- #
     def update_title(self):
-        if self.rgbfiles:
-            names = [os.path.basename(n) for n in self.rgbfiles]
-            self.setWindowTitle(f"RGB ({', '.join(names)})")
-        elif self.rgb_mode and self.rgb:
-            self.setWindowTitle(f"RGB {self.rgb} — {os.path.basename(self.tif_path)}")
+        """Show correct title for GeoTIFF or NetCDF time series."""
+        import os
+
+        if hasattr(self, "_has_time_dim") and self._has_time_dim:
+            nc_name = getattr(self, "_nc_var_name", "")
+            file_name = os.path.basename(self.tif_path)
+            title = f"Time step {self.band_index + 1}/{self.band_count} — {file_name}"
+
         elif hasattr(self, "band_index"):
             title = f"Band {self.band_index + 1}/{self.band_count} — {os.path.basename(self.tif_path)}"
-            if hasattr(self, '_has_time_dim') and self._has_time_dim:
-                time_str = self.format_time_value(self._time_values[self._time_index])
-                if len(time_str) > 15:  # Truncate if too long for title
-                    time_str = time_str[:15]
-                
-                # Use generic label for non-time dimensions
-                if self._time_dim_name and self._time_dim_name != 'time':
-                    title += f" - {self._time_dim_name}: {time_str} ({self._time_index + 1}/{len(self._time_values)})"
-                else:
-                    title += f" - {time_str}"
-            self.setWindowTitle(title)
+
+        elif self.rgb_mode and self.rgb:
+            # title = f"RGB {self.rgb} — {os.path.basename(self.tif_path)}"
+            title = f"RGB {self.rgb}"
+
         else:
-            self.setWindowTitle(f"Band {self.band}/{self.band_count} — {os.path.basename(self.tif_path)}")
-            
+            title = os.path.basename(self.tif_path)
+
+        print(f"Title: {title}")
+        self.setWindowTitle(title)
+
+    def _normalize_lat_lon(self, frame):
+        """Flip frame only if data and lat orientation disagree."""
+        import numpy as np
+
+        if not hasattr(self, "_lat_data"):
+            return frame
+
+        lats = self._lat_data
+
+        # 1D latitude case
+        if np.ndim(lats) == 1:
+            lat_ascending = lats[0] < lats[-1]
+
+            # If first pixel row corresponds to northernmost lat → do nothing
+            # If first pixel row corresponds to southernmost lat → flip to make north at top
+            # We'll assume data[0, :] corresponds to lats[0]
+            if lat_ascending:
+                print("[DEBUG] Flipping latitude orientation (lat ascending, data starts south)")
+                frame = np.flipud(frame)
+            else:
+                print("[DEBUG] No flip (lat descending, already north-up)")
+            return frame
+
+        # 2D latitude grid (rare case)
+        elif np.ndim(lats) == 2:
+            first_col = lats[:, 0]
+            lat_ascending = first_col[0] < first_col[-1]
+            if lat_ascending:
+                print("[DEBUG] Flipping latitude orientation (2D grid ascending)")
+                frame = np.flipud(frame)
+            else:
+                print("[DEBUG] No flip (2D grid already north-up)")
+            return frame
+
+        return frame
+
+    def _apply_scale_if_needed(self, frame):
+        """Downsample frame and lat/lon consistently if --scale > 1."""
+        if not hasattr(self, "_scale_arg") or self._scale_arg <= 1:
+            return frame
+
+        step = int(self._scale_arg)
+        print(f"[DEBUG] Applying scale factor {step} to current frame")
+
+        # Downsample the frame
+        frame = frame[::step, ::step]
+
+        # Also downsample lat/lon for this viewer instance if not already
+        if hasattr(self, "_lat_data") and np.ndim(self._lat_data) == 1 and len(self._lat_data) > frame.shape[0]:
+            self._lat_data = self._lat_data[::step]
+        if hasattr(self, "_lon_data") and np.ndim(self._lon_data) == 1 and len(self._lon_data) > frame.shape[1]:
+            self._lon_data = self._lon_data[::step]
+
+        return frame
+
+    def get_current_frame(self):
+        """Return the current time/band frame as a NumPy array (2D)."""
+        frame = None
+
+        if hasattr(self, '_time_dim_name') and hasattr(self, '_nc_var_data'):
+            # Select frame using band_index
+            try:
+                frame = self._nc_var_data.isel({self._time_dim_name: self.band_index})
+            except Exception:
+                # Already numpy or index error fallback
+                frame = self._nc_var_data
+
+        elif isinstance(self.data, np.ndarray):
+            frame = self.data
+
+        # Normalize lat orientation if needed
+        frame = self._normalize_lat_lon(frame)
+        frame = self._apply_scale_if_needed(frame)
+        # Convert to numpy if it's still an xarray
+        if hasattr(frame, "values"):
+            frame = frame.values
+
+        # Apply same scaling factor (if any)
+        if hasattr(self, "_scale_arg") and self._scale_arg > 1:
+            step = int(self._scale_arg)
+
+        return frame.astype(np.float32)
+        
     def format_time_value(self, time_value):
         """Format a time value into a user-friendly string"""
         # Default is the string representation
@@ -826,197 +858,117 @@ class TiffViewer(QMainWindow):
             
         return time_str
             
-    def update_time_label(self):
-        """Update the time label with the current time value"""
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            try:
-                time_value = self._time_values[self._time_index]
-                time_str = self.format_time_value(time_value)
+    # def update_time_label(self):
+    #     """Update the time label with the current time value"""
+    #     if hasattr(self, '_has_time_dim') and self._has_time_dim:
+    #         try:
+    #             time_value = self._time_values[self._time_index]
+    #             time_str = self.format_time_value(time_value)
                 
-                # Update time label if it exists
-                if hasattr(self, 'time_label'):
-                    self.time_label.setText(f"Time: {time_str}")
+    #             # Update time label if it exists
+    #             if hasattr(self, 'time_label'):
+    #                 self.time_label.setText(f"Time: {time_str}")
                 
-                # Create a progress bar style display of time position
-                total = len(self._time_values)
-                position = self._time_index + 1
-                bar_width = 20  # Width of the progress bar
-                filled = int(bar_width * position / total)
-                bar = "[" + "#" * filled + "-" * (bar_width - filled) + "]"
+    #             # Create a progress bar style display of time position
+    #             total = len(self._time_values)
+    #             position = self._time_index + 1
+    #             bar_width = 20  # Width of the progress bar
+    #             filled = int(bar_width * position / total)
+    #             bar = "[" + "#" * filled + "-" * (bar_width - filled) + "]"
                 
-                # Show time info in status bar
-                step_info = f"Time step: {position}/{total} {bar} {self.format_time_value(self._time_values[self._time_index])}"
+    #             # Show time info in status bar
+    #             step_info = f"Time step: {position}/{total} {bar} {self.format_time_value(self._time_values[self._time_index])}"
                 
-                # Update status bar if it exists
-                if hasattr(self, 'statusBar') and callable(self.statusBar):
-                    self.statusBar().showMessage(step_info)
-                else:
-                    print(step_info)
-            except Exception as e:
-                print(f"Error updating time label: {e}")
+    #             # Update status bar if it exists
+    #             if hasattr(self, 'statusBar') and callable(self.statusBar):
+    #                 self.statusBar().showMessage(step_info)
+    #             else:
+    #                 print(step_info)
+    #         except Exception as e:
+    #             print(f"Error updating time label: {e}")
             
-    def time_slider_changed(self, value):
-        """Handle time slider value change"""
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            self._time_index = value
-            
-            # Update data for new time step
-            if self._time_dim_name:
-                # Use the named dimension (time or other index)
-                var_data = self._nc_var_data.isel({self._time_dim_name: self._time_index})
-            else:
-                # Fallback to 'time' dimension
-                var_data = self._nc_var_data.isel(time=self._time_index)
-                
-            self.data = var_data.values.astype(np.float32)
-            
-            # Find and select the matching date in the combo box (if it exists)
-            if hasattr(self, 'date_combo'):
-                try:
-                    for i in range(self.date_combo.count()):
-                        if self.date_combo.itemData(i) == value:
-                            self.date_combo.blockSignals(True)  # Block signals to avoid recursion
-                            self.date_combo.setCurrentIndex(i)
-                            self.date_combo.blockSignals(False)
-                            break
-                except Exception as e:
-                    print(f"Error updating combo box: {e}")
-            
-            # Update UI
-            self.update_time_label()
-            self.update_pixmap()
-            self.update_title()
-            
-    def next_time_step(self):
-        """Go to the next time step"""
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            try:
-                next_time = (self._time_index + 1) % len(self._time_values)
-                if hasattr(self, 'time_slider'):
-                    self.time_slider.setValue(next_time)
-                else:
-                    # Direct update if slider doesn't exist
-                    self._time_index = next_time
-                    self.update_time_data()
-            except Exception as e:
-                print(f"Error going to next time step: {e}")
-            
-    def prev_time_step(self):
-        """Go to the previous time step"""
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            try:
-                prev_time = (self._time_index - 1) % len(self._time_values)
-                if hasattr(self, 'time_slider'):
-                    self.time_slider.setValue(prev_time)
-                else:
-                    # Direct update if slider doesn't exist
-                    self._time_index = prev_time
-                    self.update_time_data()
-            except Exception as e:
-                print(f"Error going to previous time step: {e}")
-                
-    def update_time_data(self):
-        """Update data for the current time index"""
-        try:
-            # Update data for current time step
-            if self._time_dim_name:
-                # Use the named dimension (time or other index)
-                var_data = self._nc_var_data.isel({self._time_dim_name: self._time_index})
-            else:
-                # Fallback to 'time' dimension
-                var_data = self._nc_var_data.isel(time=self._time_index)
-                
-            self.data = var_data.values.astype(np.float32)
-            
-            # Update UI
-            self.update_time_label()
-            self.update_pixmap()
-            self.update_title()
-        except Exception as e:
-            print(f"Error updating time data: {e}")
-            
-    def toggle_play_pause(self):
-        """Toggle play/pause animation of time steps"""
-        if self._is_playing:
-            self.stop_animation()
-        else:
-            self.start_animation()
+    # def toggle_play_pause(self):
+    #     """Toggle play/pause animation of time steps"""
+    #     if self._is_playing:
+    #         self.stop_animation()
+    #     else:
+    #         self.start_animation()
     
-    def start_animation(self):
-        """Start the time animation"""
-        from PySide6.QtCore import QTimer
+    # def start_animation(self):
+    #     """Start the time animation"""
+    #     from PySide6.QtCore import QTimer
         
-        if not hasattr(self, '_play_timer') or self._play_timer is None:
-            self._play_timer = QTimer(self)
-            self._play_timer.timeout.connect(self.animation_step)
+    #     if not hasattr(self, '_play_timer') or self._play_timer is None:
+    #         self._play_timer = QTimer(self)
+    #         self._play_timer.timeout.connect(self.animation_step)
         
-        # Set animation speed (milliseconds between frames)
-        animation_speed = 500  # 0.5 seconds between frames
-        self._play_timer.start(animation_speed)
+    #     # Set animation speed (milliseconds between frames)
+    #     animation_speed = 500  # 0.5 seconds between frames
+    #     self._play_timer.start(animation_speed)
         
-        self._is_playing = True
-        self.play_button.setText("⏸")  # Pause symbol
-        self.play_button.setToolTip("Pause animation")
+    #     self._is_playing = True
+    #     self.play_button.setText("⏸")  # Pause symbol
+    #     self.play_button.setToolTip("Pause animation")
     
-    def stop_animation(self):
-        """Stop the time animation"""
-        if hasattr(self, '_play_timer') and self._play_timer is not None:
-            self._play_timer.stop()
+    # def stop_animation(self):
+    #     """Stop the time animation"""
+    #     if hasattr(self, '_play_timer') and self._play_timer is not None:
+    #         self._play_timer.stop()
         
-        self._is_playing = False
-        self.play_button.setText("▶")  # Play symbol
-        self.play_button.setToolTip("Play animation")
+    #     self._is_playing = False
+    #     self.play_button.setText("▶")  # Play symbol
+    #     self.play_button.setToolTip("Play animation")
     
-    def animation_step(self):
-        """Advance one frame in the animation"""
-        # Go to next time step
-        next_time = (self._time_index + 1) % len(self._time_values)
-        self.time_slider.setValue(next_time)
+    # def animation_step(self):
+    #     """Advance one frame in the animation"""
+    #     # Go to next time step
+    #     next_time = (self._time_index + 1) % len(self._time_values)
+    #     self.time_slider.setValue(next_time)
     
-    def closeEvent(self, event):
-        """Clean up resources when the window is closed"""
-        # Stop animation timer if it's running
-        if hasattr(self, '_is_playing') and self._is_playing:
-            self.stop_animation()
+    # def closeEvent(self, event):
+    #     """Clean up resources when the window is closed"""
+    #     # Stop animation timer if it's running
+    #     if hasattr(self, '_is_playing') and self._is_playing:
+    #         self.stop_animation()
         
-        # Call the parent class closeEvent
-        super().closeEvent(event)
+    #     # Call the parent class closeEvent
+    #     super().closeEvent(event)
             
-    def populate_date_combo(self):
-        """Populate the date combo box with time values"""
-        if hasattr(self, '_has_time_dim') and self._has_time_dim and hasattr(self, 'date_combo'):
-            try:
-                self.date_combo.clear()
+    # def populate_date_combo(self):
+    #     """Populate the date combo box with time values"""
+    #     if hasattr(self, '_has_time_dim') and self._has_time_dim and hasattr(self, 'date_combo'):
+    #         try:
+    #             self.date_combo.clear()
                 
-                # Add a reasonable subset of dates if there are too many
-                max_items = 100  # Maximum number of items to show in dropdown
+    #             # Add a reasonable subset of dates if there are too many
+    #             max_items = 100  # Maximum number of items to show in dropdown
                 
-                if len(self._time_values) <= max_items:
-                    # Add all time values
-                    for i, time_value in enumerate(self._time_values):
-                        time_str = self.format_time_value(time_value)
-                        self.date_combo.addItem(time_str, i)
-                else:
-                    # Add a subset of time values
-                    step = len(self._time_values) // max_items
+    #             if len(self._time_values) <= max_items:
+    #                 # Add all time values
+    #                 for i, time_value in enumerate(self._time_values):
+    #                     time_str = self.format_time_value(time_value)
+    #                     self.date_combo.addItem(time_str, i)
+    #             else:
+    #                 # Add a subset of time values
+    #                 step = len(self._time_values) // max_items
                     
-                    # Always include first and last
-                    indices = list(range(0, len(self._time_values), step))
-                    if (len(self._time_values) - 1) not in indices:
-                        indices.append(len(self._time_values) - 1)
+    #                 # Always include first and last
+    #                 indices = list(range(0, len(self._time_values), step))
+    #                 if (len(self._time_values) - 1) not in indices:
+    #                     indices.append(len(self._time_values) - 1)
                     
-                    for i in indices:
-                        time_str = self.format_time_value(self._time_values[i])
-                        self.date_combo.addItem(f"{time_str} [{i+1}/{len(self._time_values)}]", i)
-            except Exception as e:
-                print(f"Error populating date combo: {e}")
+    #                 for i in indices:
+    #                     time_str = self.format_time_value(self._time_values[i])
+    #                     self.date_combo.addItem(f"{time_str} [{i+1}/{len(self._time_values)}]", i)
+    #         except Exception as e:
+    #             print(f"Error populating date combo: {e}")
                     
-    def date_combo_changed(self, index):
-        """Handle date combo box selection change"""
-        if index >= 0:
-            time_index = self.date_combo.itemData(index)
-            if time_index is not None:
-                self.time_slider.setValue(time_index)
+    # def date_combo_changed(self, index):
+    #     """Handle date combo box selection change"""
+    #     if index >= 0:
+    #         time_index = self.date_combo.itemData(index)
+    #         if time_index is not None:
+    #             self.time_slider.setValue(time_index)
 
     def _render_rgb(self):
         if self.rgb_mode:
@@ -1082,53 +1034,75 @@ class TiffViewer(QMainWindow):
         norm_data = norm_data * rng + vmin
         
         # Downsample coordinates to match downsampled data shape
-        # data shape is (lat_samples, lon_samples) after downsampling
+        # --- Align coordinates with data shape (no stepping assumptions) ---
+        # Downsample coordinates to match downsampled data shape
         data_height, data_width = data.shape[:2]
         lat_samples = len(lats)
         lon_samples = len(lons)
-        
-        # Calculate downsampling step if needed
+
         lat_step = max(1, lat_samples // data_height)
         lon_step = max(1, lon_samples // data_width)
-        
-        # Downsample coordinate arrays to match data
+
+         # Downsample coordinate arrays to match data
         lats_downsampled = lats[::lat_step][:data_height]
         lons_downsampled = lons[::lon_step][:data_width]
-        
-        # Convert 0-360 longitude to -180 to 180 if needed
+
+        # --- Synchronize latitude orientation with normalized data ---
+        if np.ndim(lats) == 1 and lats[0] < lats[-1]:
+            print("[DEBUG] Lat ascending → flip lats_downsampled to match flipped data")
+            lats_downsampled = lats_downsampled[::-1]
+        elif np.ndim(lats) == 2:
+            first_col = lats[:, 0]
+            if first_col[0] < first_col[-1]:
+                print("[DEBUG] 2D lat grid ascending → flip lats_downsampled vertically")
+                lats_downsampled = np.flipud(lats_downsampled)
+
+        # Convert 0–360 longitude to −180–180 if needed
         if lons_downsampled.max() > 180:
             lons_downsampled = ((lons_downsampled + 180) % 360) - 180
-        
-        # Create 2D meshgrid for proper coordinate alignment with cartopy
-        lon_grid, lat_grid = np.meshgrid(lons_downsampled, lats_downsampled, indexing='xy')
-        
-        # Create the plot with 2D meshgrid for proper coordinate alignment
-        contour = ax.contourf(lon_grid, lat_grid, data, 
-                            transform=ccrs.PlateCarree(),
-                            levels=levels, cmap=cmap)
-        
-        # Set map extent based on actual downsampled coordinates
-        lon_min, lon_max = lons_downsampled.min(), lons_downsampled.max()
-        lat_min, lat_max = lats_downsampled.min(), lats_downsampled.max()
-        ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
-        
+
+
+        # --- Build meshgrid AFTER any flip ---
+        lon_grid, lat_grid = np.meshgrid(lons_downsampled, lats_downsampled, indexing="xy")
+
+        # Use pcolormesh (more stable than contourf for gridded data)
+        img = ax.pcolormesh(
+            lon_grid, lat_grid, data,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            shading="auto"
+        )
+
+        # Set extent from the 1D vectors (already flipped if needed)
+        ax.set_extent(
+            [lons_downsampled.min(), lons_downsampled.max(),
+            lats_downsampled.min(), lats_downsampled.max()],
+            crs=ccrs.PlateCarree()
+        )
+
         # Add map features
-        ax.coastlines(resolution='50m', linewidth=0.5)
-        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.5)
-        ax.add_feature(cfeature.STATES, linestyle='-', linewidth=0.3, alpha=0.5)
+        ax.coastlines(resolution="50m", linewidth=0.5)
+        ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=0.5)
+        ax.add_feature(cfeature.STATES, linestyle="-", linewidth=0.3, alpha=0.5)
         ax.gridlines(draw_labels=True, alpha=0.3)
-        
-        # Add title with variable name and time if available
-        title = f"{self._nc_var_name}"
-        if hasattr(self, '_has_time_dim') and self._has_time_dim:
-            time_str = str(self._time_values[self._time_index])
-            title += f"\n{time_str}"
-        ax.set_title(title)
-        
+
+        # --- Add dynamic title ---
+        title = os.path.basename(self.tif_path)
+        if hasattr(self, "_has_time_dim") and self._has_time_dim:
+            # Use current band_index as proxy for time_index
+            try:
+                current_time = self._time_values[self.band_index]
+                time_str = self.format_time_value(current_time) if hasattr(self, "format_time_value") else str(current_time)
+                ax.set_title(f"{title}\n{time_str}", fontsize=10)
+            except Exception as e:
+                ax.set_title(f"{title}\n(time step {self.band_index + 1})", fontsize=10)
+        else:
+            ax.set_title(title, fontsize=10)
+
         # Add colorbar
-        plt.colorbar(contour, ax=ax, shrink=0.6)
-        
+        plt.colorbar(img, ax=ax, shrink=0.6)
         plt.tight_layout()
+
         
         # Convert matplotlib figure to image
         canvas = FigureCanvasAgg(fig)
@@ -1269,6 +1243,7 @@ class TiffViewer(QMainWindow):
         elif k == Qt.Key.Key_BracketRight:
             if hasattr(self, "band_index"):  # HDF/NetCDF mode
                 self.band_index = (self.band_index + 1) % self.band_count
+                self.data = self.get_current_frame()
                 self.update_pixmap()
                 self.update_title()
             elif not self.rgb_mode:  # GeoTIFF single-band mode
@@ -1278,6 +1253,7 @@ class TiffViewer(QMainWindow):
         elif k == Qt.Key.Key_BracketLeft:
             if hasattr(self, "band_index"):  # HDF/NetCDF mode
                 self.band_index = (self.band_index - 1) % self.band_count
+                self.data = self.get_current_frame()
                 self.update_pixmap()
                 self.update_title()
             elif not self.rgb_mode:  # GeoTIFF single-band mode
@@ -1312,33 +1288,6 @@ class TiffViewer(QMainWindow):
 
 
 # --------------------------------- CLI ----------------------------------- #
-def main():
-    parser = argparse.ArgumentParser(description="TIFF viewer with RGB (2–98%) & shapefile overlays")
-    parser.add_argument("tif_path", nargs="?", help="Path to TIFF (optional if --rgbfiles is used)")
-    parser.add_argument("--scale", type=int, default=1, help="Downsample factor (1=full, 10=10x smaller)")
-    parser.add_argument("--band", type=int, default=1, help="Band number (ignored if --rgb/--rgbfiles used)")
-    parser.add_argument("--rgb", nargs=3, type=int, help="Three band numbers for RGB, e.g. --rgb 4 3 2")
-    parser.add_argument("--rgbfiles", nargs=3, help="Three single-band TIFFs for RGB, e.g. --rgbfiles B4.tif B3.tif B2.tif")
-    parser.add_argument("--shapefile", nargs="+", help="One or more shapefiles to overlay")
-    parser.add_argument("--shp-color", default="cyan", help="Overlay color (name or #RRGGBB). Default: cyan")
-    parser.add_argument("--shp-width", type=float, default=1.5, help="Overlay line width (screen pixels). Default: 1.5")
-    args = parser.parse_args()
-
-    app = QApplication(sys.argv)
-    win = TiffViewer(
-        args.tif_path,
-        scale=args.scale,
-        band=args.band,
-        rgb=args.rgb,
-        rgbfiles=args.rgbfiles,
-        shapefiles=args.shapefile,
-        shp_color=args.shp_color,
-        shp_width=args.shp_width,
-    )
-    win.show()
-    sys.exit(app.exec())
-
-
 def run_viewer(
     tif_path,
     scale=None,
