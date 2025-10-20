@@ -8,7 +8,7 @@ A lightweight GeoTIFF viewer for quick visualization directly from the command l
 You can visualize single-band GeoTIFFs, RGB composites, and shapefile overlays in a simple Qt-based window.
 
 ---
-Latest stable release: v0.1.9 (PyPI)
+Latest stable release: v0.1.10 (PyPI)
 
 Development branch: v0.2.0-dev (experimental, not released)
 
@@ -32,7 +32,7 @@ pip install "viewtif[geo]"
 > **Note:** For macOS(zsh) users:
 > Make sure to include the quotes, or zsh will interpret it as a pattern.
 
-#### HDF/HDF5 support
+#### HDF/HDF5 support 
 ```bash
 brew install gdal     # macOS
 sudo apt install gdal-bin python3-gdal  # Linux
@@ -71,8 +71,14 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 `[WARN] raster lacks CRS/transform; cannot place overlays.`
 
 ### Update in v1.0.7: File Geodatabase (.gdb) support
-`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`), using the GDAL `OpenFileGDB` driver.  
+`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`).
 When you open a .gdb directly, `viewtif` will list available raster datasets first, then you can choose one to view.
+
+Most Rasterio installations already include the OpenFileGDB driver, so .gdb datasets often open without installing GDAL manually.
+
+If you encounter:
+RuntimeError: GDB support requires GDAL,
+install GDAL as shown above to enable the driver. 
 
 ```bash
 # List available raster datasets
@@ -81,7 +87,7 @@ viewtif /path/to/geodatabase.gdb
 # Open a specific raster
 viewtif "OpenFileGDB:/path/to/geodatabase.gdb:RasterName"
 ```
-> **Note:** Requires GDAL 3.7 or later with the OpenFileGDB driver enabled. If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
+> **Note:** If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
 
 ### Update in v1.0.7: Large raster safeguard
 As of v1.0.7, `viewtif` automatically checks the raster size before loading.  

@@ -53,37 +53,52 @@ except Exception:
     HAVE_GEO = False
 
 def warn_if_large(tif_path, scale=1):
-    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF)."""
-    from osgeo import gdal
+    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF).
+    Works even if GDAL is not installed.
+    """
     import os
+    width = height = None
+    size_mb = None
 
+    # Try GDAL if available
     try:
+        from osgeo import gdal
         gdal.UseExceptions()
         info = gdal.Info(tif_path, format="json")
         width, height = info.get("size", [0, 0])
-        total_pixels = (width * height) / (scale ** 2)  # account for downsampling
-        size_mb = None
-        if os.path.exists(tif_path):
-            size_mb = os.path.getsize(tif_path) / (1024 ** 2)
-
-        # Only warn if the *effective* pixels remain large
-        if total_pixels > 20_000_000 and scale <= 5:
-            print(
-                f"[WARN] Large raster detected ({width}×{height}, ~{total_pixels/1e6:.1f}M effective pixels"
-                + (f", ~{size_mb:.1f} MB" if size_mb else "")
-                + "). Loading may freeze. Consider rerunning with --scale (e.g. --scale 10)."
-            )
-            ans = input("Proceed anyway? [y/N]: ").strip().lower()
-            if ans not in ("y", "yes"):
-                print("Cancelled.")
-                sys.exit(0)
+    except ImportError:
+        # Fallback if GDAL not installed
+        try:
+            import rasterio
+            with rasterio.open(tif_path) as src:
+                width, height = src.width, src.height
+        except Exception:
+            print("[WARN] Could not estimate raster size (no GDAL/rasterio). Skipping size check.")
+            return
     except Exception as e:
-        print(f"[WARN] Could not pre-check raster size: {e}")
+        print(f"[WARN] Could not pre-check raster size with GDAL: {e}")
+        return
+
+    # File size
+    if os.path.exists(tif_path):
+        size_mb = os.path.getsize(tif_path) / (1024 ** 2)
+
+    total_pixels = (width * height) / (scale ** 2)
+    if total_pixels > 20_000_000 and scale <= 5:
+        msg = (
+            f"[WARN] Large raster detected ({width}×{height}, ~{total_pixels/1e6:.1f}M pixels"
+            + (f", ~{size_mb:.1f} MB" if size_mb else "")
+            + "). Loading may freeze. Consider --scale (e.g. --scale 10)."
+        )
+        print(msg)
+        ans = input("Proceed anyway? [y/N]: ").strip().lower()
+        if ans not in ("y", "yes"):
+            print("Cancelled.")
+            sys.exit(0)
 
 # -------------------------- QGraphicsView tweaks -------------------------- #
 class RasterView(QGraphicsView):
     def __init__(self, *args, **kwargs):
-        import numpy as np
         super().__init__(*args, **kwargs)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -190,84 +205,96 @@ class TiffViewer(QMainWindow):
                 except subprocess.CalledProcessError as e:
                     print(f"[WARN] Could not inspect FileGDB: {e}")
                     sys.exit(0)
-                # --- Universal size check before loading ---
+
+            # --- Universal size check before loading ---
             warn_if_large(tif_path, scale=self._scale_arg)
+
             # --------------------- Detect HDF/HDF5 --------------------- #
             if tif_path.lower().endswith((".hdf", ".h5", ".hdf5")):
                 try:
-                    from osgeo import gdal
-                    gdal.UseExceptions()
-
-                    ds = gdal.Open(tif_path)
-                    subs = ds.GetSubDatasets()
-
-                    if not subs:
-                        raise ValueError("No subdatasets found in HDF/HDF5 file.")
-
-                    print(f"Found {len(subs)} subdatasets in {os.path.basename(tif_path)}:")
-                    for i, (_, desc) in enumerate(subs):
-                        print(f"[{i}] {desc}")
-
-                    # Only list subsets if --subset not given
-                    if subset is None:
-                        print("\nUse --subset N to open a specific subdataset.")
-                        sys.exit(0)
-
-                    # Validate subset index
-                    if subset < 0 or subset >= len(subs):
-                        raise ValueError(f"Invalid subset index {subset}. Valid range: 0–{len(subs)-1}")
-
-                    sub_name, desc = subs[subset]
-                    print(f"\nOpening subdataset [{subset}]: {desc}")
-                    sub_ds = gdal.Open(sub_name)
-
-                    # --- Read once ---
-                    arr = sub_ds.ReadAsArray().astype(np.float32)
-                    #print(f"Raw array shape from GDAL: {arr.shape} (ndim={arr.ndim})")
-
-                    # --- Normalize shape ---
-                    arr = np.squeeze(arr)
-                    if arr.ndim == 3:
-                        # Convert from (bands, rows, cols) → (rows, cols, bands)
-                        arr = np.transpose(arr, (1, 2, 0))
-                        #print(f"Transposed to {arr.shape} (rows, cols, bands)")
-                    elif arr.ndim == 2:
-                        print("Single-band dataset.")
-                    else:
-                        raise ValueError(f"Unexpected array shape {arr.shape}")
-
-                    # --- Downsample large arrays for responsiveness ---
-                    h, w = arr.shape[:2]
-                    if h * w > 4_000_000:
-                        step = max(2, int((h * w / 4_000_000) ** 0.5))
-                        arr = arr[::step, ::step] if arr.ndim == 2 else arr[::step, ::step, :]
-                        print(f"⚠️ Large dataset preview: downsampled by {step}x")
-
-                    # --- Final assignments ---
-                    self.data = arr
-                    self._transform = None
-                    self._crs = None
-                    self.band_count = arr.shape[2] if arr.ndim == 3 else 1
-                    self.band_index = 0
-                    self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
-
-                    if self.band_count > 1:
-                        print(f"This subdataset has {self.band_count} bands — switch with [ and ] keys.")
-                    else:
-                        print("This subdataset has 1 band.")
-
-                    # --- If user specified --band, start there ---
-                    if self.band and self.band <= self.band_count:
-                        self.band_index = self.band - 1
-                        print(f"Opening band {self.band}/{self.band_count}")
-                    else:
+                    # Try reading directly with Rasterio first (works for simple HDF layouts)
+                    with rasterio.open(tif_path) as src:
+                        print(f"Opened HDF with rasterio: {os.path.basename(tif_path)}")
+                        arr = src.read().astype(np.float32)
+                        arr = np.squeeze(arr)
+                        if arr.ndim == 3:
+                            arr = np.transpose(arr, (1, 2, 0))
+                        elif arr.ndim == 2:
+                            print("Single-band dataset.")
+                        self.data = arr
+                        self._transform = src.transform
+                        self._crs = src.crs
+                        self.band_count = arr.shape[2] if arr.ndim == 3 else 1
                         self.band_index = 0
+                        self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+                        return  # ✅ Skip GDAL path if Rasterio succeeded
 
-                except ImportError:
-                    raise RuntimeError(
-                        "HDF support requires GDAL.\n"
-                        "Install it first (e.g., brew install gdal && pip install GDAL)"
-                    )
+                except Exception as e:
+                    print(f"Rasterio could not open HDF directly: {e}")
+                    print("Falling back to GDAL...")
+
+                    try:
+                        from osgeo import gdal
+                        gdal.UseExceptions()
+
+                        ds = gdal.Open(tif_path)
+                        subs = ds.GetSubDatasets()
+                        if not subs:
+                            raise ValueError("No subdatasets found in HDF/HDF5 file.")
+
+                        print(f"Found {len(subs)} subdatasets in {os.path.basename(tif_path)}:")
+                        for i, (_, desc) in enumerate(subs):
+                            print(f"[{i}] {desc}")
+
+                        if subset is None:
+                            print("\nUse --subset N to open a specific subdataset.")
+                            sys.exit(0)
+
+                        if subset < 0 or subset >= len(subs):
+                            raise ValueError(f"Invalid subset index {subset}. Valid range: 0–{len(subs)-1}")
+
+                        sub_name, desc = subs[subset]
+                        print(f"\nOpening subdataset [{subset}]: {desc}")
+                        sub_ds = gdal.Open(sub_name)
+
+                        arr = sub_ds.ReadAsArray().astype(np.float32)
+                        arr = np.squeeze(arr)
+                        if arr.ndim == 3:
+                            arr = np.transpose(arr, (1, 2, 0))
+                        elif arr.ndim == 2:
+                            print("Single-band dataset.")
+                        else:
+                            raise ValueError(f"Unexpected array shape {arr.shape}")
+
+                        # Downsample large arrays for responsiveness
+                        h, w = arr.shape[:2]
+                        if h * w > 4_000_000:
+                            step = max(2, int((h * w / 4_000_000) ** 0.5))
+                            arr = arr[::step, ::step] if arr.ndim == 2 else arr[::step, ::step, :]
+                            print(f"⚠️ Large dataset preview: downsampled by {step}x")
+
+                        # Assign
+                        self.data = arr
+                        self._transform = None
+                        self._crs = None
+                        self.band_count = arr.shape[2] if arr.ndim == 3 else 1
+                        self.band_index = 0
+                        self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+
+                        if self.band_count > 1:
+                            print(f"This subdataset has {self.band_count} bands — switch with [ and ] keys.")
+                        else:
+                            print("This subdataset has 1 band.")
+
+                        if self.band and self.band <= self.band_count:
+                            self.band_index = self.band - 1
+                            print(f"Opening band {self.band}/{self.band_count}")
+
+                    except ImportError:
+                        raise RuntimeError(
+                            "HDF/HDF5 support requires GDAL (Python bindings).\n"
+                            "Install it first (e.g., brew install gdal && pip install GDAL)"
+                        )
 
             # --------------------- Regular GeoTIFF --------------------- #
             else:
@@ -487,8 +514,7 @@ class TiffViewer(QMainWindow):
             rgb = np.zeros_like(arr)
             if np.any(finite):
                 # Global 2–98 percentile stretch across all bands (QGIS-like)
-                global_min = np.nanpercentile(arr, 2)
-                global_max = np.nanpercentile(arr, 98)
+                global_min, global_max = np.nanpercentile(arr, (2, 98))
                 rng = max(global_max - global_min, 1e-12)
                 norm = np.clip((arr - global_min) / rng, 0, 1)
                 rgb = np.clip(norm * self.contrast, 0, 1)
@@ -640,8 +666,8 @@ class TiffViewer(QMainWindow):
             super().keyPressEvent(ev)
 
 
-# --------------------------------- CLI ----------------------------------- #
-def main():
+# --------------------------------- Legacy argparse CLI (not used by default) ----------------------------------- #
+def legacy_argparse_main():
     parser = argparse.ArgumentParser(description="TIFF viewer with RGB (2–98%) & shapefile overlays")
     parser.add_argument("tif_path", nargs="?", help="Path to TIFF (optional if --rgbfiles is used)")
     parser.add_argument("--scale", type=int, default=1, help="Downsample factor (1=full, 10=10x smaller)")
@@ -653,6 +679,8 @@ def main():
     parser.add_argument("--shp-width", type=float, default=1.5, help="Overlay line width (screen pixels). Default: 1.5")
     args = parser.parse_args()
 
+    from PySide6.QtCore import Qt
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     app = QApplication(sys.argv)
     win = TiffViewer(
         args.tif_path,
@@ -677,9 +705,12 @@ def run_viewer(
     shapefile=None,
     shp_color=None,
     shp_width=None,
-    subset=None,
+    subset=None
 ):
+
     """Launch the TiffViewer app"""
+    from PySide6.QtCore import Qt
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     app = QApplication(sys.argv)
     win = TiffViewer(
         tif_path,
@@ -690,7 +721,7 @@ def run_viewer(
         shapefiles=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
-        subset=subset,
+        subset=subset
     )
     win.show()
     sys.exit(app.exec())
@@ -698,16 +729,17 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("1.0.9", prog_name="viewtif")
+@click.version_option("0.1.10", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
-@click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
+@click.option("--scale", default=1.0, show_default=True, type=int, help="Scale factor for display")
 @click.option("--rgb", nargs=3, type=int, help="Three band numbers for RGB, e.g. --rgb 4 3 2")
 @click.option("--rgbfiles", nargs=3, type=str, help="Three single-band TIFFs for RGB, e.g. --rgbfiles B4.tif B3.tif B2.tif")
 @click.option("--shapefile", multiple=True, type=str, help="One or more shapefiles to overlay")
 @click.option("--shp-color", default="white", show_default=True, help="Overlay color (name or #RRGGBB).")
 @click.option("--shp-width", default=1.0, show_default=True, type=float, help="Overlay line width (screen pixels).")
 @click.option("--subset", default=None, type=int, help="Open specific subdataset index in .hdf/.h5 file")
+
 def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, subset):
     """Lightweight GeoTIFF viewer."""
     # --- Warn early if shapefile requested but geopandas missing ---
@@ -727,7 +759,7 @@ def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, 
         shapefile=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
-        subset=subset,
+        subset=subset
     )
 
 if __name__ == "__main__":
