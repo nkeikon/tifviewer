@@ -1,7 +1,6 @@
 # viewtif
 [![Downloads](https://static.pepy.tech/badge/viewtif)](https://pepy.tech/project/viewtif)
 [![PyPI version](https://img.shields.io/pypi/v/viewtif)](https://pypi.org/project/viewtif/)
-[![Python versions](https://img.shields.io/pypi/pyversions/viewtif)](https://pypi.org/project/viewtif/)
 
 A lightweight GeoTIFF viewer for quick visualization directly from the command line.  
 
@@ -33,6 +32,11 @@ pip install GDAL
 ```
 > **Note:** GDAL is required to open `.hdf`, .`h5`, and `.hdf5` files. If it’s missing, viewtif will display: `RuntimeError: HDF support requires GDAL.`
 
+#### NetCDF support 
+```bash
+brew install  "viewtif[netcdf]"
+```
+> **Note:** For enhanced geographic visualization with map projections, coastlines, and borders, install with cartopy: `pip install "viewtif[netcdf]"` (cartopy is included in the netcdf extra). If cartopy is not available, netCDF files will still display with standard RGB rendering.
 ## Quick Start
 ```bash
 # View a GeoTIFF
@@ -64,14 +68,11 @@ viewtif AG100.v003.33.-107.0001.h5 --subset 1 --band 3
 `[WARN] raster lacks CRS/transform; cannot place overlays.`
 
 ### Update in v1.0.7: File Geodatabase (.gdb) support
-`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`).
-When you open a .gdb directly, `viewtif` will list available raster datasets first, then you can choose one to view.
+`viewtif` can now open raster datasets stored inside Esri File Geodatabases (`.gdb`). When you open a .gdb directly, `viewtif`` will list available raster datasets first, then you can choose one to view.
 
 Most Rasterio installations already include the OpenFileGDB driver, so .gdb datasets often open without installing GDAL manually.
 
-If you encounter:
-RuntimeError: GDB support requires GDAL,
-install GDAL as shown above to enable the driver. 
+If you encounter: RuntimeError: GDB support requires GDAL, install GDAL as shown above to enable the driver.
 
 ```bash
 # List available raster datasets
@@ -86,6 +87,19 @@ viewtif "OpenFileGDB:/path/to/geodatabase.gdb:RasterName"
 As of v1.0.7, `viewtif` automatically checks the raster size before loading.  
 If the dataset is very large (e.g., >20 million pixels), it will pause and warn that loading may freeze your system.  
 You can proceed manually or rerun with the `--scale` option for a smaller, faster preview.
+
+### Update in v0.2.2: NetCDF support with optional cartopy visualization
+`viewtif` now supports NetCDF (`.nc`) files with xarray and optional cartopy geographic visualization.
+
+#### Installation with NetCDF support
+```bash
+pip install "viewtif[netcdf]"
+```
+
+#### Examples
+```bash
+viewtif data.nc
+```
 
 ## Controls
 | Key                  | Action                                  |
