@@ -42,7 +42,7 @@ import matplotlib.cm as cm
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="shapely")
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 # Optional overlay deps
 try:
@@ -1321,7 +1321,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("0.2.3", prog_name="viewtif")
+@click.version_option("0.2.4", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=int, help="Scale factor for display")
