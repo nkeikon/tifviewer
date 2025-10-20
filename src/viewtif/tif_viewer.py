@@ -42,7 +42,7 @@ import matplotlib.cm as cm
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="shapely")
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Optional overlay deps
 try:
@@ -768,7 +768,7 @@ class TiffViewer(QMainWindow):
             # If first pixel row corresponds to southernmost lat → flip to make north at top
             # We'll assume data[0, :] corresponds to lats[0]
             if lat_ascending:
-                print("[DEBUG] Flipping latitude orientation (lat ascending, data starts south)")
+                # print("[DEBUG] Flipping latitude orientation (lat ascending, data starts south)")
                 frame = np.flipud(frame)
 #             else:
 #                 print("[DEBUG] No flip (lat descending, already north-up)")
@@ -779,7 +779,7 @@ class TiffViewer(QMainWindow):
             first_col = lats[:, 0]
             lat_ascending = first_col[0] < first_col[-1]
             if lat_ascending:
-                print("[DEBUG] Flipping latitude orientation (2D grid ascending)")
+                # print("[DEBUG] Flipping latitude orientation (2D grid ascending)")
                 frame = np.flipud(frame)
 #             else:
 #                 print("[DEBUG] No flip (2D grid already north-up)")
@@ -793,7 +793,7 @@ class TiffViewer(QMainWindow):
             return frame
 
         step = int(self._scale_arg)
-        print(f"[DEBUG] Applying scale factor {step} to current frame")
+        print(f"Applying scale factor {step} to current frame")
 
         # Downsample the frame
         frame = frame[::step, ::step]
@@ -1049,12 +1049,12 @@ class TiffViewer(QMainWindow):
 
         # --- Synchronize latitude orientation with normalized data ---
         if np.ndim(lats) == 1 and lats[0] < lats[-1]:
-            print("[DEBUG] Lat ascending → flip lats_downsampled to match flipped data")
+            # print("[DEBUG] Lat ascending → flip lats_downsampled to match flipped data")
             lats_downsampled = lats_downsampled[::-1]
         elif np.ndim(lats) == 2:
             first_col = lats[:, 0]
             if first_col[0] < first_col[-1]:
-                print("[DEBUG] 2D lat grid ascending → flip lats_downsampled vertically")
+                # print("[DEBUG] 2D lat grid ascending → flip lats_downsampled vertically")
                 lats_downsampled = np.flipud(lats_downsampled)
 
         # Convert 0–360 longitude to −180–180 if needed
@@ -1321,7 +1321,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("0.2.2", prog_name="viewtif")
+@click.version_option("0.2.3", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=int, help="Scale factor for display")
