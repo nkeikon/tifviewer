@@ -210,6 +210,9 @@ class TiffViewer(QMainWindow):
             self.tif_path = self.tif_path or (os.path.commonprefix([red, green, blue]) or red)
 
         elif tif_path:
+            # --- Warn for large files before loading ---
+            warn_if_large(tif_path, scale=self._scale_arg)
+
             # --------------------- Detect NetCDF --------------------- #
             if tif_path and tif_path.lower().endswith((".nc", ".netcdf")):
                 try:
@@ -377,8 +380,8 @@ class TiffViewer(QMainWindow):
                     print(f"[WARN] Could not inspect FileGDB: {e}")
                     sys.exit(0)
 
-            # --- Universal size check before loading ---
-            warn_if_large(tif_path, scale=self._scale_arg)
+            # # --- Universal size check before loading ---
+            # warn_if_large(tif_path, scale=self._scale_arg)
             
             if False:  # Placeholder for previous if condition
                 pass
