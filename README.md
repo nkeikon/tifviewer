@@ -6,7 +6,6 @@ A lightweight GeoTIFF viewer for quick visualization directly from the command l
 
 You can visualize single-band GeoTIFFs, RGB composites, HDF, NetCDF files and shapefile overlays in a simple Qt-based window.
 
-
 ## Installation
 
 ```bash
@@ -25,7 +24,7 @@ pip install "viewtif[geo]"
 > **Note:** For macOS(zsh) users:
 > Make sure to include the quotes, or zsh will interpret it as a pattern.
 
-#### HDF/HDF5 support
+#### HDF/HDF5 support 
 ```bash
 brew install gdal     # macOS
 sudo apt install gdal-bin python3-gdal  # Linux
@@ -77,7 +76,7 @@ viewtif /path/to/geodatabase.gdb
 # Open a specific raster
 viewtif "OpenFileGDB:/path/to/geodatabase.gdb:RasterName"
 ```
-> **Note:** Requires GDAL 3.7 or later with the OpenFileGDB driver enabled. If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
+> **Note:** If multiple raster datasets are present, viewtif lists them all and shows how to open each. The .gdb path and raster name must be separated by a colon (:).
 
 ### Update in v1.0.7: Large raster safeguard
 As of v1.0.7, `viewtif` automatically checks the raster size before loading.  

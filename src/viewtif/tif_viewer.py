@@ -69,11 +69,12 @@ except Exception:
     HAVE_CARTOPY = False
 
 def warn_if_large(tif_path, scale=1):
-    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF).
-    
+    """Warn and confirm before loading very large rasters (GeoTIFF, GDB, or HDF).    
     Uses GDAL if available, falls back to rasterio for standard formats.
     """
     import os
+    width = height = None
+    size_mb = None
 
     if tif_path and os.path.dirname(tif_path).endswith(".gdb"):
         tif_path = f"OpenFileGDB:{os.path.dirname(tif_path)}:{os.path.basename(tif_path)}"
@@ -122,7 +123,6 @@ def warn_if_large(tif_path, scale=1):
 # -------------------------- QGraphicsView tweaks -------------------------- #
 class RasterView(QGraphicsView):
     def __init__(self, *args, **kwargs):
-        import numpy as np
         super().__init__(*args, **kwargs)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -376,7 +376,8 @@ class TiffViewer(QMainWindow):
                 except subprocess.CalledProcessError as e:
                     print(f"[WARN] Could not inspect FileGDB: {e}")
                     sys.exit(0)
-                # --- Universal size check before loading ---
+
+            # --- Universal size check before loading ---
             warn_if_large(tif_path, scale=self._scale_arg)
             
             if False:  # Placeholder for previous if condition
@@ -444,12 +445,9 @@ class TiffViewer(QMainWindow):
                     else:
                         print("This subdataset has 1 band.")
 
-                    # --- If user specified --band, start there ---
-                    if self.band and self.band <= self.band_count:
-                        self.band_index = self.band - 1
-                        print(f"Opening band {self.band}/{self.band_count}")
-                    else:
-                        self.band_index = 0
+                        if self.band and self.band <= self.band_count:
+                            self.band_index = self.band - 1
+                            print(f"Opening band {self.band}/{self.band_count}")
 
                 except ImportError:
                     # GDAL not available, try rasterio as fallback for NetCDF
@@ -769,8 +767,8 @@ class TiffViewer(QMainWindow):
             if lat_ascending:
                 print("[DEBUG] Flipping latitude orientation (lat ascending, data starts south)")
                 frame = np.flipud(frame)
-            else:
-                print("[DEBUG] No flip (lat descending, already north-up)")
+#             else:
+#                 print("[DEBUG] No flip (lat descending, already north-up)")
             return frame
 
         # 2D latitude grid (rare case)
@@ -780,8 +778,8 @@ class TiffViewer(QMainWindow):
             if lat_ascending:
                 print("[DEBUG] Flipping latitude orientation (2D grid ascending)")
                 frame = np.flipud(frame)
-            else:
-                print("[DEBUG] No flip (2D grid already north-up)")
+#             else:
+#                 print("[DEBUG] No flip (2D grid already north-up)")
             return frame
 
         return frame
@@ -977,8 +975,7 @@ class TiffViewer(QMainWindow):
             rgb = np.zeros_like(arr)
             if np.any(finite):
                 # Global 2–98 percentile stretch across all bands (QGIS-like)
-                global_min = np.nanpercentile(arr, 2)
-                global_max = np.nanpercentile(arr, 98)
+                global_min, global_max = np.nanpercentile(arr, (2, 98))
                 rng = max(global_max - global_min, 1e-12)
                 norm = np.clip((arr - global_min) / rng, 0, 1)
                 rgb = np.clip(norm * self.contrast, 0, 1)
@@ -1297,9 +1294,12 @@ def run_viewer(
     shapefile=None,
     shp_color=None,
     shp_width=None,
-    subset=None,
+    subset=None
 ):
+
     """Launch the TiffViewer app"""
+    from PySide6.QtCore import Qt
+#     QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     app = QApplication(sys.argv)
     win = TiffViewer(
         tif_path,
@@ -1310,7 +1310,7 @@ def run_viewer(
         shapefiles=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
-        subset=subset,
+        subset=subset
     )
     win.show()
     sys.exit(app.exec())
@@ -1321,7 +1321,7 @@ import click
 @click.version_option("0.2.0", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
-@click.option("--scale", default=1.0, show_default=True, type=float, help="Scale factor for display")
+@click.option("--scale", default=1.0, show_default=True, type=int, help="Scale factor for display")
 @click.option("--rgb", nargs=3, type=int, help="Three band numbers for RGB, e.g. --rgb 4 3 2")
 @click.option("--rgbfiles", nargs=3, type=str, help="Three single-band TIFFs for RGB, e.g. --rgbfiles B4.tif B3.tif B2.tif")
 @click.option("--shapefile", multiple=True, type=str, help="One or more shapefiles to overlay")
@@ -1347,7 +1347,7 @@ def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, 
         shapefile=shapefile,
         shp_color=shp_color,
         shp_width=shp_width,
-        subset=subset,
+        subset=subset
     )
 
 if __name__ == "__main__":
