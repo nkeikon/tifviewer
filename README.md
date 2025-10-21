@@ -137,3 +137,9 @@ This project is released under the MIT License.
 ## Contributors
 - [@HarshShinde0](https://github.com/HarshShinde0) — added mouse-wheel and trackpad zoom support; added NetCDF support with [@nkeikon](https://github.com/nkeikon) 
 - [@p-vdp](https://github.com/p-vdp) — added File Geodatabase (.gdb) raster support
+
+## Useful links
+- https://www.linkedin.com/posts/desmond-lartey_geospatial-analysts-heads-up-check-out-activity-7386336488050925568-G5bN?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc
+- https://www.linkedin.com/posts/keiko-nomura-0231891_dont-you-sometimes-just-want-to-see-a-activity-7383409138296528896-sbRM?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc
+- https://www.linkedin.com/posts/keiko-nomura-0231891_now-you-can-see-hdf-files-from-the-command-activity-7383963721561399296-F5i0?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc
+- https://www.linkedin.com/posts/keiko-nomura-0231891_you-can-now-view-netcdf-files-nc-from-activity-7386189562072670208-3A0V?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc
