@@ -1,6 +1,9 @@
 # viewtif
 [![Downloads](https://static.pepy.tech/badge/viewtif)](https://pepy.tech/project/viewtif)
 [![PyPI version](https://img.shields.io/pypi/v/viewtif)](https://pypi.org/project/viewtif/)
+[![Python version](https://img.shields.io/badge/python-%3E%3D3.9-blue.svg)](https://pypi.org/project/viewtif/)
+
+
 
 A lightweight GeoTIFF viewer for quick visualization directly from the command line.  
 
@@ -34,9 +37,9 @@ pip install GDAL
 
 #### NetCDF support 
 ```bash
-brew install  "viewtif[netcdf]"
+pip install  "viewtif[netcdf]"
 ```
-> **Note:** For enhanced geographic visualization with map projections, coastlines, and borders, install with cartopy: `pip install "viewtif[netcdf]"` (cartopy is included in the netcdf extra). If cartopy is not available, netCDF files will still display with standard RGB rendering.
+> **Note:** For enhanced geographic visualization with map projections, coastlines, and borders, install with cartopy: `pip install "viewtif[netcdf]"` (cartopy is included in the netcdf extra). If cartopy is not available, netCDF files will still display with standard rendering.
 ## Quick Start
 ```bash
 # View a GeoTIFF
@@ -89,12 +92,7 @@ If the dataset is very large (e.g., >20 million pixels), it will pause and warn 
 You can proceed manually or rerun with the `--scale` option for a smaller, faster preview.
 
 ### Update in v0.2.2: NetCDF support with optional cartopy visualization
-`viewtif` now supports NetCDF (`.nc`) files with xarray and optional cartopy geographic visualization.
-
-#### Installation with NetCDF support
-```bash
-pip install "viewtif[netcdf]"
-```
+`viewtif` now supports NetCDF (`.nc`) files via xarray, with optional cartopy-based geographic visualization. Use`[` / `]` to move forward or backward through time steps.
 
 #### Examples
 ```bash
