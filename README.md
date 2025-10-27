@@ -122,6 +122,8 @@ viewtif data.nc
 - Zip_Codes.shp and associated files
 - HLS_B04.tif, HLS_B03.tif, HLS_B02.tif (RGB sample)
 - AG100.v003.33.-107.0001.h5 (HDF5 file)
+- [tasmax_mon_ACCESS-CM2_ssp370_r1i1p1f1_gn_2021.nc](https://data.nas.nasa.gov/nex-dcp30-cmip6/monthly/ACCESS-CM2/ssp370/r1i1p1f1/tasmax/tasmax_mon_ACCESS-CM2_ssp370_r1i1p1f1_gn_2021.nc)
+- [tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc](https://dap.ceda.ac.uk/badc/cmip6/data/CMIP6/ScenarioMIP/KIOST/KIOST-ESM/ssp585/r1i1p1f1/Amon/tas/gr1/v20191106/tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc)
 
 ## Credit & License
 `viewtif` was inspired by the NASA JPL Thermal Viewer — Semi-Automated Georeferencer (GeoViewer v1.12) developed by Jake Longenecker (University of Miami Rosenstiel School of Marine, Atmospheric & Earth Science) while at the NASA Jet Propulsion Laboratory, California Institute of Technology, with inspiration from JPL’s ECOSTRESS geolocation batch workflow by Andrew Alamillo. The original GeoViewer was released under the MIT License (2025) and may be freely adapted with citation.
