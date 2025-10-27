@@ -42,7 +42,7 @@ import matplotlib.cm as cm
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="shapely")
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 # Optional overlay deps
 try:
@@ -210,10 +210,31 @@ class TiffViewer(QMainWindow):
             self.tif_path = self.tif_path or (os.path.commonprefix([red, green, blue]) or red)
 
         elif tif_path:
-            # --- Warn for large files before loading ---
+             # ---------------- Handle File Geodatabase (.gdb) ---------------- #
+            if tif_path and tif_path.lower().endswith(".gdb") and ":" not in tif_path:
+                import re, subprocess
+                gdb_path = tif_path  # use full path to .gdb
+                try:
+                    out = subprocess.check_output(["gdalinfo", "-norat", gdb_path], text=True)
+                    rasters = re.findall(r"RASTER_DATASET=(\S+)", out)
+                    if not rasters:
+                        print(f"[WARN] No raster datasets found in {os.path.basename(gdb_path)}.")
+                        sys.exit(0)
+                    else:
+                        print(f"Found {len(rasters)} raster dataset{'s' if len(rasters) > 1 else ''}:")
+                        for i, r in enumerate(rasters):
+                            print(f"[{i}] {r}")
+                        print("\nUse one of these names to open. For example, to open the first raster:")
+                        print(f'viewtif "OpenFileGDB:{gdb_path}:{rasters[0]}"')
+                        sys.exit(0)
+                except subprocess.CalledProcessError as e:
+                    print(f"[WARN] Could not inspect FileGDB: {e}")
+                    sys.exit(0)
+
+           # --- Warn for large files before loading ---
             warn_if_large(tif_path, scale=self._scale_arg)
 
-            # --------------------- Detect NetCDF --------------------- #
+           # --------------------- Detect NetCDF --------------------- #
             if tif_path and tif_path.lower().endswith((".nc", ".netcdf")):
                 try:
                     # Lazy-load NetCDF dependencies
@@ -359,26 +380,6 @@ class TiffViewer(QMainWindow):
                 except Exception as e:
                     raise RuntimeError(f"Error reading NetCDF file: {str(e)}")
             
-            # ---------------- Handle File Geodatabase (.gdb) ---------------- #
-            if tif_path and tif_path.lower().endswith(".gdb") and ":" not in tif_path:
-                import re, subprocess
-                gdb_path = tif_path  # use full path to .gdb
-                try:
-                    out = subprocess.check_output(["gdalinfo", "-norat", gdb_path], text=True)
-                    rasters = re.findall(r"RASTER_DATASET=(\S+)", out)
-                    if not rasters:
-                        print(f"[WARN] No raster datasets found in {os.path.basename(gdb_path)}.")
-                        sys.exit(0)
-                    else:
-                        print(f"Found {len(rasters)} raster dataset{'s' if len(rasters) > 1 else ''}:")
-                        for i, r in enumerate(rasters):
-                            print(f"[{i}] {r}")
-                        print("\nUse one of these names to open. For example, to open the first raster:")
-                        print(f'viewtif "OpenFileGDB:{gdb_path}:{rasters[0]}"')
-                        sys.exit(0)
-                except subprocess.CalledProcessError as e:
-                    print(f"[WARN] Could not inspect FileGDB: {e}")
-                    sys.exit(0)
 
             # # --- Universal size check before loading ---
             # warn_if_large(tif_path, scale=self._scale_arg)
@@ -858,118 +859,6 @@ class TiffViewer(QMainWindow):
             pass
             
         return time_str
-            
-    # def update_time_label(self):
-    #     """Update the time label with the current time value"""
-    #     if hasattr(self, '_has_time_dim') and self._has_time_dim:
-    #         try:
-    #             time_value = self._time_values[self._time_index]
-    #             time_str = self.format_time_value(time_value)
-                
-    #             # Update time label if it exists
-    #             if hasattr(self, 'time_label'):
-    #                 self.time_label.setText(f"Time: {time_str}")
-                
-    #             # Create a progress bar style display of time position
-    #             total = len(self._time_values)
-    #             position = self._time_index + 1
-    #             bar_width = 20  # Width of the progress bar
-    #             filled = int(bar_width * position / total)
-    #             bar = "[" + "#" * filled + "-" * (bar_width - filled) + "]"
-                
-    #             # Show time info in status bar
-    #             step_info = f"Time step: {position}/{total} {bar} {self.format_time_value(self._time_values[self._time_index])}"
-                
-    #             # Update status bar if it exists
-    #             if hasattr(self, 'statusBar') and callable(self.statusBar):
-    #                 self.statusBar().showMessage(step_info)
-    #             else:
-    #                 print(step_info)
-    #         except Exception as e:
-    #             print(f"Error updating time label: {e}")
-            
-    # def toggle_play_pause(self):
-    #     """Toggle play/pause animation of time steps"""
-    #     if self._is_playing:
-    #         self.stop_animation()
-    #     else:
-    #         self.start_animation()
-    
-    # def start_animation(self):
-    #     """Start the time animation"""
-    #     from PySide6.QtCore import QTimer
-        
-    #     if not hasattr(self, '_play_timer') or self._play_timer is None:
-    #         self._play_timer = QTimer(self)
-    #         self._play_timer.timeout.connect(self.animation_step)
-        
-    #     # Set animation speed (milliseconds between frames)
-    #     animation_speed = 500  # 0.5 seconds between frames
-    #     self._play_timer.start(animation_speed)
-        
-    #     self._is_playing = True
-    #     self.play_button.setText("⏸")  # Pause symbol
-    #     self.play_button.setToolTip("Pause animation")
-    
-    # def stop_animation(self):
-    #     """Stop the time animation"""
-    #     if hasattr(self, '_play_timer') and self._play_timer is not None:
-    #         self._play_timer.stop()
-        
-    #     self._is_playing = False
-    #     self.play_button.setText("▶")  # Play symbol
-    #     self.play_button.setToolTip("Play animation")
-    
-    # def animation_step(self):
-    #     """Advance one frame in the animation"""
-    #     # Go to next time step
-    #     next_time = (self._time_index + 1) % len(self._time_values)
-    #     self.time_slider.setValue(next_time)
-    
-    # def closeEvent(self, event):
-    #     """Clean up resources when the window is closed"""
-    #     # Stop animation timer if it's running
-    #     if hasattr(self, '_is_playing') and self._is_playing:
-    #         self.stop_animation()
-        
-    #     # Call the parent class closeEvent
-    #     super().closeEvent(event)
-            
-    # def populate_date_combo(self):
-    #     """Populate the date combo box with time values"""
-    #     if hasattr(self, '_has_time_dim') and self._has_time_dim and hasattr(self, 'date_combo'):
-    #         try:
-    #             self.date_combo.clear()
-                
-    #             # Add a reasonable subset of dates if there are too many
-    #             max_items = 100  # Maximum number of items to show in dropdown
-                
-    #             if len(self._time_values) <= max_items:
-    #                 # Add all time values
-    #                 for i, time_value in enumerate(self._time_values):
-    #                     time_str = self.format_time_value(time_value)
-    #                     self.date_combo.addItem(time_str, i)
-    #             else:
-    #                 # Add a subset of time values
-    #                 step = len(self._time_values) // max_items
-                    
-    #                 # Always include first and last
-    #                 indices = list(range(0, len(self._time_values), step))
-    #                 if (len(self._time_values) - 1) not in indices:
-    #                     indices.append(len(self._time_values) - 1)
-                    
-    #                 for i in indices:
-    #                     time_str = self.format_time_value(self._time_values[i])
-    #                     self.date_combo.addItem(f"{time_str} [{i+1}/{len(self._time_values)}]", i)
-    #         except Exception as e:
-    #             print(f"Error populating date combo: {e}")
-                    
-    # def date_combo_changed(self, index):
-    #     """Handle date combo box selection change"""
-    #     if index >= 0:
-    #         time_index = self.date_combo.itemData(index)
-    #         if time_index is not None:
-    #             self.time_slider.setValue(time_index)
 
     def _render_rgb(self):
         if self.rgb_mode:
@@ -1321,7 +1210,7 @@ def run_viewer(
 import click
 
 @click.command()
-@click.version_option("0.2.4", prog_name="viewtif")
+@click.version_option("0.2.5", prog_name="viewtif")
 @click.argument("tif_path", required=False)
 @click.option("--band", default=1, show_default=True, type=int, help="Band number to display")
 @click.option("--scale", default=1.0, show_default=True, type=int, help="Scale factor for display")

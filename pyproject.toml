@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viewtif"
-version = "0.2.4"
+version = "0.2.5"
 description = "Lightweight GeoTIFF, NetCDF, HDF/HDF5, and Esri File Geodatabase (.gdb) viewer with optional shapefile overlay. NetCDF and cartopy support available via pip install viewtif[netcdf]."
 readme = "README.md"
 requires-python = ">=3.9"
