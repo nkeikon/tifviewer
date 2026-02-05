@@ -7,6 +7,8 @@ A lightweight GeoTIFF viewer for quick visualization directly from the command l
 
 You can visualize single-band GeoTIFFs, RGB composites, HDF, NetCDF files, and raster datasets within Esri File Geodatabases with vector overlays in a simple Qt-based window.
 
+> **Note:** `viewtif` is meant for quick viewing and sanity checks, not for detailed or rigorous analysis. Think of it as a fast preview, not a replacement for full GIS or scientific analysis tools.
+
 ## Installation
 
 ```bash
