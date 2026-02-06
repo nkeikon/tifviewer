@@ -276,6 +276,8 @@ This project is released under the MIT License © 2025 Keiko Nomura.
 If you find this tool useful, please consider supporting or acknowledging the author. 
 
 ## Useful links
+- [YouTube demo playlist](https://www.youtube.com/playlist?list=PLP9MNCMgJIHj6FvahJ6Tembp1rCyhLtR4)
+- [Demo V0.2.7 as of Feb 2026](https://www.linkedin.com/posts/keiko-nomura-0231891_dont-you-sometimes-just-want-to-see-a-tif-activity-7425056949953814529-_6Xo?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc)
 - [Demo by User](https://www.linkedin.com/posts/desmond-lartey_geospatial-analysts-heads-up-check-out-activity-7386336488050925568-G5bN?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc)
 - [Demo at the initial release](https://www.linkedin.com/posts/keiko-nomura-0231891_dont-you-sometimes-just-want-to-see-a-activity-7383409138296528896-sbRM?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc)
 - [Demo on HDF files](https://www.linkedin.com/posts/keiko-nomura-0231891_now-you-can-see-hdf-files-from-the-command-activity-7383963721561399296-F5i0?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAA0INsBVIO1f6nS_NkKqFh4Na1ZpoYo2fc)
