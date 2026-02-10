@@ -9,11 +9,6 @@ You can visualize single-band GeoTIFFs, RGB composites, HDF, NetCDF files, and r
 
 > **Note:** `viewtif` is meant for quick viewing and sanity checks, not for detailed or rigorous analysis. Think of it as a fast preview, not a replacement for full GIS or scientific analysis tools.
 
-## Need help?
-
-You can ask questions about usage via the documentation-based chatbot:  
-👉 [Ask the viewtif + viewgeom + viewinline Helper](https://chatgpt.com/g/g-698b61c42f788191b884aed1b99dfcd8-viewtif-viewgeom-viewinline-helper)
-
 ## Installation
 
 ```bash
@@ -264,6 +259,14 @@ For a complete list, run `viewtif --help`. Key options:
 - AG100.v003.33.-107.0001.h5 (HDF5 file)
 - [tasmax_mon_ACCESS-CM2_ssp370_r1i1p1f1_gn_2021.nc](https://data.nas.nasa.gov/nex-dcp30-cmip6/monthly/ACCESS-CM2/ssp370/r1i1p1f1/tasmax/tasmax_mon_ACCESS-CM2_ssp370_r1i1p1f1_gn_2021.nc)
 - [tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc](https://dap.ceda.ac.uk/badc/cmip6/data/CMIP6/ScenarioMIP/KIOST/KIOST-ESM/ssp585/r1i1p1f1/Amon/tas/gr1/v20191106/tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc)
+
+## Need help?
+
+You can ask questions about usage via the documentation-based chatbot:  
+
+👉 [Ask the viewtif + viewgeom + viewinline Helper](https://chatgpt.com/g/g-698b61c42f788191b884aed1b99dfcd8-viewtif-viewgeom-viewinline-helper)
+
+👉 [For NASA employees via ChatGSFC](https://chat.gsfc.nasa.gov/c/new?agent_id=agent_euP144qzCv0USqL8PcPZe) 
 
 ## Credit & License
 `viewtif` was inspired by the NASA JPL Thermal Viewer — Semi-Automated Georeferencer (GeoViewer v1.12) developed by Jake Longenecker (University of Miami Rosenstiel School of Marine, Atmospheric & Earth Science) while at the NASA Jet Propulsion Laboratory, California Institute of Technology, with inspiration from JPL's ECOSTRESS geolocation batch workflow by Andrew Alamillo. The original GeoViewer was released under the MIT License (2025) and may be freely adapted with citation.
