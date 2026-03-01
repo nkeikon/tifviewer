@@ -261,12 +261,7 @@ For a complete list, run `viewtif --help`. Key options:
 - [tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc](https://dap.ceda.ac.uk/badc/cmip6/data/CMIP6/ScenarioMIP/KIOST/KIOST-ESM/ssp585/r1i1p1f1/Amon/tas/gr1/v20191106/tas_Amon_KIOST-ESM_ssp585_r1i1p1f1_gr1_201501-210012.nc)
 
 ## Need help?
-
-You can ask questions about usage via the documentation-based assistant:
-
-👉 [Ask the viewtif + viewgeom + viewinline Helper](https://chatgpt.com/g/g-698b61c42f788191b884aed1b99dfcd8-viewtif-viewgeom-viewinline-helper)
-
-👉 For NASA staff: find 'viewtif + viewgeom + viewinline Helper' via the ChatGSFC Agent Marketplace
+NASA staff can ask questions about usage via the documentation-based assistant 'viewtif + viewgeom + viewinline Helper' via the ChatGSFC Agent Marketplace.
 
 
 ## Credit & License
