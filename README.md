@@ -114,18 +114,20 @@ viewtif data.nc
 
 viewtif data.nc --subset 1  # Opens pressure
 ```
-> **Note:** `viewtif` supports 2D (lat, lon) or 3D (time, lat, lon) NetCDF data. Variables with additional dimensions (e.g., vertical levels) are not currently supported (as of v0.2.7).
+> **Note:** `viewtif` supports 2D NetCDF data and 3D variables with a time, band, or spectral axis. Variables with more than three dimensions (e.g., vertical levels) are not currently supported. For files with non-standard dimension names, viewtif auto-detects the band axis or you can specify it with --reduce (see below).
 
 #### NetCDF visualization controls
 - `--vmin [value] --vmax [value]` let you fix the display range (for all file types). Without this, the range adjusts to each band/timestep's min/max values.
-- `--timestep [int]` lets you jump directly to a chosen time slice.
+- `--timestep [int]` let you jump directly to a chosen time slice.
 - `--cartopy off` let you see raw NetCDF images.
+- `--reduce DIM` let you specify which dimension to use as the band axis for 3D NetCDF 
 
 ```bash
 viewtif data.nc
 viewtif data.nc --vmin 280 --vmax 320
 viewtif data.nc --timestep 100
 viewtif data.nc --cartopy off
+viewtif hyperspectral.nc --subset 20 --reduce NumberOfChannels
 ```
 
 ### File Geodatabase (.gdb)

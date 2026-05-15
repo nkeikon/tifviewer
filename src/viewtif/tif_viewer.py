@@ -11,6 +11,8 @@ Features:
 - Overlay vector files automatically reprojected to raster CRS
 - Navigate bands/time steps interactively
 - Remote file support: open files directly from HTTP/HTTPS URLs, S3, Google Cloud Storage, and Azure Blob Storage.
+- Open hyperspectral NetCDF cubes (PICARD, AVIRIS, EMIT, etc.) with hierarchical groups
+- Reduce along user-specified dimension with --reduce
 
 Controls
   + / - : zoom in/out
@@ -26,6 +28,8 @@ Examples
   python tiff_viewer.py my.tif --band 1
   python tiff_viewer.py my_multiband.tif --rgb 4 3 2
   python tiff_viewer.py --rgbfiles B4.tif B3.tif B2.tif --shapefile coast.shp counties.shp --shp-color cyan --shp-width 1.8
+  python tiff_viewer.py file.nc --subset 10 --timestep 5 --reduce time
+  python tiff_viewer.py file.nc --subset 10 --band 5 --reduce channels
 """
 
 import sys
@@ -38,7 +42,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QPainterPath
 from PySide6.QtCore import Qt
 
-__version__ = "0.2.7"
+__version__ = "0.2.9"
 
 # Lazy-loaded heavy imports
 _rasterio = None
@@ -219,6 +223,7 @@ class TiffViewer(QMainWindow):
         cartopy="on",
         timestep=None,
         nodata=None, 
+        reduce_dim=None,
     ):
         super().__init__()
 
@@ -351,13 +356,64 @@ class TiffViewer(QMainWindow):
                         print("Install them with: pip install viewtif[netcdf]")
                         sys.exit(0)
 
-                    # Open the NetCDF file
-                    ds = xr.open_dataset(tif_path)
-                    
-                    # List variables, filtering out boundary variables (ending with _bnds)
-                    all_vars = list(ds.data_vars)
-                    data_vars = [var for var in all_vars if not var.endswith('_bnds')]
-                    
+                    # Open the NetCDF file (root level)
+                    # Try with CF decoding first; fall back to raw values for files
+                    # with malformed attributes (e.g., per-band scale_factor arrays
+                    # in some hyperspectral instrument data).
+                    try:
+                        ds = xr.open_dataset(tif_path, decode_timedelta=False)
+                    except Exception:
+                        ds = xr.open_dataset(tif_path, decode_cf=False, decode_timedelta=False)
+                        print(f"[INFO] {os.path.basename(tif_path)}: opened without CF decoding (malformed scale_factor/fill_value).")
+  
+                    # Also open any nested groups (PICARD, AVIRIS, etc. organize
+                    # variables under groups like /radiometric_data/)
+                    group_datasets = {"": ds}
+                    try:
+                        import netCDF4
+                        nc = netCDF4.Dataset(tif_path)
+                        def collect_group_paths(g, prefix=""):
+                            paths = []
+                            for name in g.groups:
+                                full = f"{prefix}{name}"
+                                paths.append(full)
+                                paths.extend(collect_group_paths(g.groups[name], f"{full}/"))
+                            return paths
+                        for gp in collect_group_paths(nc):
+                            try:
+                                group_datasets[gp] = xr.open_dataset(tif_path, group=gp, decode_timedelta=False)
+                            except Exception:
+                                try:
+                                    group_datasets[gp] = xr.open_dataset(tif_path, group=gp, decode_cf=False, decode_timedelta=False)
+                                    print(f"[INFO] Group '{gp}': opened without CF decoding (malformed attributes).")
+                                except Exception as e:
+                                    print(f"[WARN] Could not open group '{gp}': {e}")
+
+                        nc.close()
+                    except ImportError:
+                        # netCDF4 not available; only root-level variables will be shown
+                        pass
+
+                    # Build a flat list of (display_name, source_dataset, var_name) tuples
+                    # across all groups, filtering boundary and non-numeric variables
+                    data_vars_info = []
+                    for group_path, group_ds in group_datasets.items():
+                        for var in group_ds.data_vars:
+                            if var.endswith('_bnds'):
+                                continue
+                            if not np.issubdtype(group_ds[var].dtype, np.number):
+                                continue
+                            display_name = f"{group_path}/{var}" if group_path else var
+                            data_vars_info.append((display_name, group_ds, var))
+
+                    # Keep data_vars as a list of display names for backward compatibility
+                    data_vars = [info[0] for info in data_vars_info]
+
+                    if not data_vars:
+                        print(f"[ERROR] No numeric variables found in {os.path.basename(tif_path)}.")
+                        print(f"[INFO] viewtif only supports numeric NetCDF variables.")
+                        sys.exit(1)
+
                     # Auto-select the first variable if there's only one and no subset specified
                     if len(data_vars) == 1 and subset is None:
                         subset = 0
@@ -368,15 +424,19 @@ class TiffViewer(QMainWindow):
                             print(f"[{i}] {var}")
                         print("\nUse --subset N to open a specific variable.")
                         sys.exit(0)
-                    
+
                     # Validate subset index
                     if subset < 0 or subset >= len(data_vars):
                         raise ValueError(f"Invalid variable index {subset}. Valid range: 0–{len(data_vars)-1}")
-                    
-                    # Get the selected variable from filtered data_vars
-                    var_name = data_vars[subset]
-                    var_data = ds[var_name]
-                    
+
+                    # Get the selected variable from the right group dataset
+                    display_name, source_ds, var_name = data_vars_info[subset]
+                    var_data = source_ds[var_name]
+
+                    # Make `ds` point to the source dataset, so downstream code
+                    # that uses `ds` (e.g., `ds.variables['crs']` later) still works
+                    ds = source_ds
+                  
                     # Store original dataset and variable information for better visualization
                     self._nc_dataset = ds
                     self._nc_var_name = var_name
@@ -397,48 +457,82 @@ class TiffViewer(QMainWindow):
                     self._has_time_dim = False
                     self._time_dim_name = None
                     
-                    # Look for a time dimension first
                     if 'time' in var_data.dims:
                         self._has_time_dim = True
                         self._time_dim_name = "time"
                         self._time_values = ds["time"].values
-                        self._time_index = 0
                         print(f"NetCDF time dimension detected: {len(self._time_values)} steps")
                         self.band_count = var_data.sizes["time"]
-                        self.band_index = 0
-                        var_data = var_data.isel(time=0)
+                        # Honor --band on the climate path (--timestep takes precedence if set)
+                        if timestep is not None:
+                            initial_band = max(0, min(timestep - 1, self.band_count - 1))
+                        else:
+                            initial_band = max(0, min(self.band - 1, self.band_count - 1))
+                        self._time_index = initial_band
+                        self.band_index = initial_band
+                        var_data = var_data.isel(time=initial_band)
 
                     elif len(var_data.dims) > 2:
-                        # Try to find a dimension that's not lat/lon
                         spatial_dims = ['lat', 'lon', 'latitude', 'longitude', 'y', 'x']
-                        for dim in var_data.dims:
-                            if dim not in spatial_dims:
-                                self._has_time_dim = True
-                                self._time_dim_name = dim
-                                self._time_values = ds[dim].values
-                                self._time_index = 0
-                                var_data = var_data.isel({dim: 0})
-                                break
+                        
+                        chosen_dim = None
+                        
+                        # 1. User override via --reduce
+                        if reduce_dim is not None:
+                            if reduce_dim in var_data.dims:
+                                chosen_dim = reduce_dim
+                                print(f"[INFO] Using user-specified --reduce '{reduce_dim}'")
+                            else:
+                                print(f"[ERROR] --reduce '{reduce_dim}' is not a dimension of this variable.")
+                                print(f"[INFO] Available dimensions: {list(var_data.dims)}")
+                                sys.exit(1)
+                        
+                        # 2. Standard convention: reduce along the non-spatial dim
+                        if chosen_dim is None:
+                            has_standard_spatial = any(d in spatial_dims for d in var_data.dims)
+                            if has_standard_spatial:
+                                for dim in var_data.dims:
+                                    if dim not in spatial_dims:
+                                        chosen_dim = dim
+                                        break
+                        
+                        # 3. Fallback: smallest dim is typically the band axis
+                        if chosen_dim is None:
+                            sizes = [(dim, var_data.sizes[dim]) for dim in var_data.dims]
+                            chosen_dim = min(sizes, key=lambda x: x[1])[0]
+                            print(f"[INFO] Non-standard dimensions detected: {list(var_data.dims)}")
+                            print(f"[INFO] Reducing along '{chosen_dim}' (size {var_data.sizes[chosen_dim]}, assumed band/spectral axis)")
+                            print(f"[INFO] If this is not correct, use --reduce DIM_NAME to override.")
 
+                        self._has_time_dim = True
+                        self._time_dim_name = chosen_dim
+                        try:
+                            self._time_values = ds[chosen_dim].values
+                        except KeyError:
+                            self._time_values = np.arange(var_data.sizes[chosen_dim])
+                        self.band_count = var_data.sizes[chosen_dim]
+                        # Convert --band (1-based) to 0-based index, clamped to valid range
+                        initial_band = max(0, min(self.band - 1, self.band_count - 1))
+                        self._time_index = initial_band
+                        self.band_index = initial_band
+                        var_data = var_data.isel({chosen_dim: initial_band})
+
+                    # Check that the variable has numeric data
+                    if not np.issubdtype(var_data.dtype, np.number):
+                        print(f"[ERROR] Variable '{var_data.name}' has non-numeric dtype: {var_data.dtype}")
+                        print(f"[INFO] viewtif can only display numeric image data, not metadata or strings.")
+                        sys.exit(1)
                     arr = var_data.values.astype(np.float32)
+
                     arr = np.squeeze(arr)
 
-                    # Check if variable has unsupported dimensions (e.g., vertical levels)
-                    spatial_dims = ['lat', 'lon', 'latitude', 'longitude', 'y', 'x']
-                    time_dims = ['time']
-
-                    # Count spatial and time dimensions
-                    spatial_count = sum(1 for d in var_data.dims if d in spatial_dims)
-                    time_count = sum(1 for d in var_data.dims if d in time_dims)
+                    # After any reduction, the variable should be 2D
                     total_dims = len(var_data.dims)
-
-                    # Valid: 2 spatial dims, or 1 time + 2 spatial dims
-                    is_valid = (total_dims == 2 and spatial_count == 2) or \
-                               (total_dims == 3 and time_count == 1 and spatial_count == 2)
-
+                    is_valid = total_dims == 2
                     if not is_valid:
                         print(f"[ERROR] Variable has unsupported dimensions: {list(var_data.dims)}")
-                        print(f"[INFO] viewtif only supports 2D (lat, lon) or 3D (time, lat, lon) NetCDF data")
+                        print(f"[INFO] viewtif can display 2D variables, or 3D with one axis reduced.")
+
                         sys.exit(1)
 
                     # --------------------------------------------------------
@@ -478,7 +572,11 @@ class TiffViewer(QMainWindow):
                         self.band_count = 1
                         self.band_index = 0
 
-                    self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
+                    # --- FIX: Calculate and print the initial range for NetCDF ---
+                    data_min, data_max = np.nanmin(arr), np.nanmax(arr)
+                    self._print_value_range(data_min, data_max)
+                    
+                    self.vmin, self.vmax = data_min, data_max
 
                     if self._user_vmin is not None:
                         self.vmin = self._user_vmin
@@ -555,11 +653,11 @@ class TiffViewer(QMainWindow):
                     self._crs = None
                     self.band_count = arr.shape[2] if arr.ndim == 3 else 1
                     self.band_index = 0
-                    self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
-                    if getattr(self, "_scale_arg", 1) > 1:
-                        print(f"[INFO] Value range (scaled): {self.vmin:.3f} -> {self.vmax:.3f}")
-                    else:
-                        print(f"[INFO] Value range: {self.vmin:.3f} -> {self.vmax:.3f}")
+
+                    data_min, data_max = np.nanmin(arr), np.nanmax(arr)
+                    self._print_value_range(data_min, data_max)
+                    if self._user_vmin is None and self._user_vmax is None:
+                        self.vmin, self.vmax = data_min, data_max
 
                 except ImportError as e:
                     if "osgeo" in str(e):
@@ -637,11 +735,11 @@ class TiffViewer(QMainWindow):
                                 raise ValueError("No stats in file")
                         except Exception:
                             # Always calculate from masked array for consistency
-                            self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
-                            if getattr(self, "_scale_arg", 1) > 1:
-                                print(f"[INFO] Value range (scaled): {self.vmin:.3f} -> {self.vmax:.3f}")
-                            else:
-                                print(f"[INFO] Value range: {self.vmin:.3f} -> {self.vmax:.3f}")
+
+                            data_min, data_max = np.nanmin(arr), np.nanmax(arr)
+                            self._print_value_range(data_min, data_max)
+                            if self._user_vmin is None and self._user_vmax is None:
+                                self.vmin, self.vmax = data_min, data_max
 
         # Window title
         self.update_title()
@@ -1065,17 +1163,23 @@ class TiffViewer(QMainWindow):
             self.scene.addItem(item)
             self.basemap_items.append(item)
 
+    def _print_value_range(self, data_min, data_max):
+        """Print the actual data min/max, noting downsampling if applicable."""
+        scaled = getattr(self, "_scale_arg", 1) > 1
+        suffix = " (downsampled)" if scaled else ""
+        print(f"[INFO] Value range{suffix}: {data_min:.3f} -> {data_max:.3f}")
+
     # ----------------------- Title / Rendering ----------------------- #
     def update_title(self):
-        """Add band before the title."""
         import os
         file_name = os.path.basename(self.tif_path)
 
         if hasattr(self, "_has_time_dim") and self._has_time_dim:
-            # nc_name = getattr(self, "_nc_var_name", "")
+            # Check the actual name of the dimension
+            dim_name = getattr(self, "_time_dim_name", "").lower()
+            prefix = "Time step" if dim_name == "time" else "Band"
             
-            title = f"Time step {self.band_index + 1}/{self.band_count} — {file_name}"
-            
+            title = f"{prefix} {self.band_index + 1}/{self.band_count} — {file_name}"    
 
         elif hasattr(self, "band_index"):
             title = f"Band {self.band_index + 1}/{self.band_count} — {file_name}"
@@ -1419,12 +1523,17 @@ class TiffViewer(QMainWindow):
 
             # Inform user when cartopy was requested but cannot be used
             if self.cartopy_mode == "on" and not use_cartopy:
-                if not HAVE_CARTOPY:
-                    print("[INFO] Cartopy not installed — using standard scientific rendering.")
-                elif not getattr(self, "_use_cartopy", False):
-                    print("[INFO] This file lacks geospatial coordinates — cartopy disabled.")
-                elif not getattr(self, "_has_geo_coords", False):
-                    print("[INFO] No lat/lon coordinates found — cartopy disabled.")
+                # Add a flag check so it only prints once!
+                if not getattr(self, "_cartopy_warned", False):
+                    if not HAVE_CARTOPY:
+                        print("[INFO] Cartopy not installed — using standard scientific rendering.")
+                    elif not getattr(self, "_use_cartopy", False):
+                        print("[INFO] This file lacks geospatial coordinates — cartopy disabled.")
+                    elif not getattr(self, "_has_geo_coords", False):
+                        print("[INFO] No lat/lon coordinates found — cartopy disabled.")
+                    
+                    # Set the flag to True so we never print this again
+                    self._cartopy_warned = True
 
         if use_cartopy:
             rgb = self._render_cartopy_map(a)
@@ -1463,7 +1572,7 @@ class TiffViewer(QMainWindow):
             cmap = getattr(cm, self.cmap_name, cm.viridis)
             rgb = (cmap(norm)[..., :3] * 255).astype(np.uint8)
         else:
-            # True RGB mode (unchanged)
+            # True RGB mode
             rgb = self._render_rgb()
 
 
@@ -1493,7 +1602,11 @@ class TiffViewer(QMainWindow):
 
         with rasterio.open(tif_path) as src:
             self.band = band_num
-            arr = src.read(self.band).astype(np.float32)
+            # arr = src.read(self.band).astype(np.float32)
+            arr = src.read(
+                self.band,
+                out_shape=(src.height // self._scale_arg, src.width // self._scale_arg)
+            ).astype(np.float32)
 
             # Apply user-specified nodata first
             if self._nodata is not None:
@@ -1504,9 +1617,11 @@ class TiffViewer(QMainWindow):
             if nd is not None:
                 arr[arr == nd] = np.nan
             self.data = arr
+            data_min, data_max = np.nanmin(arr), np.nanmax(arr)
+            self._print_value_range(data_min, data_max)
+            if self._user_vmin is None and self._user_vmax is None:
+                self.vmin, self.vmax = data_min, data_max
 
-            self.vmin, self.vmax = np.nanmin(arr), np.nanmax(arr)
-            print(f"[INFO] Value range: {self.vmin:.3f} -> {self.vmax:.3f}")
         self.update_pixmap()
         self.update_title()
 
@@ -1573,12 +1688,12 @@ class TiffViewer(QMainWindow):
         elif k == Qt.Key.Key_BracketRight:
             if hasattr(self, "band_index"):  # HDF/NetCDF mode
                 self.band_index = (self.band_index + 1) % self.band_count
+
                 self.data = self.get_current_frame()
-                
-                # Recalculate and print value range for new band
+                data_min, data_max = np.nanmin(self.data), np.nanmax(self.data)
+                self._print_value_range(data_min, data_max)
                 if self._user_vmin is None and self._user_vmax is None:
-                    self.vmin, self.vmax = np.nanmin(self.data), np.nanmax(self.data)
-                    print(f"[INFO] Value range: {self.vmin:.3f} -> {self.vmax:.3f}")
+                    self.vmin, self.vmax = data_min, data_max
                 
                 self.update_pixmap()
                 self.update_title()
@@ -1649,6 +1764,7 @@ def run_viewer(
     cartopy="on",
     timestep=None,
     nodata=None,
+    reduce_dim=None,
 ):
 
     """Launch the TiffViewer app"""
@@ -1668,6 +1784,7 @@ def run_viewer(
         cartopy=cartopy,
         timestep=timestep,
         nodata=nodata,
+        reduce_dim=reduce_dim,
     )
     win.show()
     sys.exit(app.exec())
@@ -1685,6 +1802,7 @@ import click
 @click.option("--shp-color", default="cyan", show_default=True, help="Vector overlay color (name or #RRGGBB).")
 @click.option("--shp-width", default=1.0, show_default=True, type=float, help="Vector overlay line width (screen pixels).")
 @click.option("--subset", default=None, type=int, help="Open specific subdataset index in .hdf/.h5 file or variable in NetCDF file")
+@click.option("--reduce", "reduce_dim", default=None, type=str, help="For 3D NetCDF variables with non-standard dimensions, specify which dimension to use as the band/slider axis (auto-detected if omitted)")
 @click.option("--vmin", type=float, default=None, help="Manual minimum display value")
 @click.option("--vmax", type=float, default=None, help="Manual maximum display value")
 @click.option(
@@ -1707,7 +1825,7 @@ import click
 )
 @click.option("--nodata", type=float, default=None, help="Nodata value to mask (e.g., -9999)")
 
-def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, subset, vmin, vmax, cartopy, timestep, qgis, nodata):    
+def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, subset, vmin, vmax, cartopy, timestep, qgis, nodata, reduce_dim):    
     """Lightweight GeoTIFF, NetCDF, and HDF viewer."""
     # --- Warn early if shapefile requested but geopandas missing ---
     if shapefile and not HAVE_GEO:
@@ -2046,6 +2164,7 @@ def main(tif_path, band, scale, rgb, rgbfiles, shapefile, shp_color, shp_width, 
         cartopy=cartopy,
         timestep=timestep,
         nodata=nodata,
+        reduce_dim=reduce_dim,
     )
 
 if __name__ == "__main__":
