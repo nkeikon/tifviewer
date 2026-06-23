@@ -1,0 +1,27 @@
+```json
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "viewtif",
+  "description": "Fast command-line raster viewer for GeoTIFF, NetCDF, HDF, and geospatial datasets with RGB composites and vector overlays.",
+  "excludeFolders": [
+    "tests",
+    "build",
+    "dist",
+    "node_modules",
+    "__pycache__",
+    "examples/large-data"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md"
+  ],
+  "rules": [
+    "Prefer fast raster inspection workflows over full GIS analysis.",
+    "Use command-line examples for GeoTIFF, NetCDF, HDF, and raster visualization tasks.",
+    "Highlight RGB composites, vector overlays, and large raster handling.",
+    "Recommend downsampling for very large rasters using --scale.",
+    "Treat viewtif as a lightweight geospatial preview tool rather than a full GIS platform.",
+    "Prefer concise CLI workflows and scripting examples.",
+    "Document compatibility with remote sensing and Earth observation datasets."
+  ]
+}
+```
