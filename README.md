@@ -289,7 +289,7 @@ Longenecker, Jake; Lee, Christine; Hulley, Glynn; Cawse-Nicholson, Kerry; Gleaso
 - [@p-vdp](https://github.com/p-vdp) — added File Geodatabase (.gdb) raster support
 
 ## License
-This project is released under the MIT License © 2025 Keiko Nomura.
+This project is released under the MIT License © 2026 Keiko Nomura.
 
 If you find this tool useful, please consider supporting or acknowledging the author. 
 
