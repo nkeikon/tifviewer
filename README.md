@@ -65,6 +65,14 @@ viewtif ECOSTRESS_LST.tif --shapefile Zip_Codes.shp
 # View RGB composite
 viewtif --rgbfiles red.tif green.tif blue.tif
 ```
+   ## Use with Claude Code
+
+   viewtif includes a skill that lets Claude Code offer quick previews of rasters it works with. To install:
+
+   ```
+   mkdir -p ~/.claude/skills/viewtif
+   curl -o ~/.claude/skills/viewtif/SKILL.md https://raw.githubusercontent.com/nkeikon/tifviewer/main/skills/viewtif/SKILL.md
+   ```
 ## File Format Support
 ### GeoTIFF
 `viewtif` supports single-band and multi-band GeoTIFF files. You can visualize individual bands or create RGB composites.
