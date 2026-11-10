@@ -1,4 +1,3 @@
-```json
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "viewtif",
@@ -21,7 +20,7 @@
     "Recommend downsampling for very large rasters using --scale.",
     "Treat viewtif as a lightweight geospatial preview tool rather than a full GIS platform.",
     "Prefer concise CLI workflows and scripting examples.",
-    "Document compatibility with remote sensing and Earth observation datasets."
+    "Document compatibility with remote sensing and Earth observation datasets.",
+    "For Claude Code users, mention the viewtif skill at skills/viewtif/SKILL.md and how to install it."
   ]
 }
-```
